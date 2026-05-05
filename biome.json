@@ -1,0 +1,72 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "ignore": ["node_modules", "dist", "src/generated", "scripts/captures"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "complexity": {
+        "noBannedTypes": "error",
+        "useLiteralKeys": "warn"
+      },
+      "correctness": {
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error"
+      },
+      "style": {
+        "useConst": "error",
+        "useTemplate": "warn",
+        "noNonNullAssertion": "warn"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noConsoleLog": "off"
+      },
+      "nursery": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "@/clients/forkable": "core/* must not import from clients/* — pass injected callables instead",
+              "@/clients/openai-scorer": "core/* must not import from clients/* — pass injected callables instead",
+              "@/clients/resend-mailer": "core/* must not import from clients/* — pass injected callables instead"
+            }
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "include": ["src/cli.ts", "src/index.ts", "scripts/**", "tests/**"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    }
+  ]
+}

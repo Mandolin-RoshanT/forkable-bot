@@ -1,0 +1,21 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Captures (PII, real meal IDs, real cookies)
+scripts/captures/
+
+# Bun / Node
+node_modules/
+*.log
+.DS_Store
+
+# Build artifacts
+dist/
+*.tsbuildinfo
+
+# Tooling caches
+.tldr/
+.cache/
+.claude/
