@@ -15,7 +15,6 @@ import { fileURLToPath } from 'node:url';
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const FORKABLE_GRAPHQL = 'https://forkable.com/api/v2/graphql';
-const FORKABLE_PUBLIC_GRAPHQL = 'https://forkable.com/api/v2/public/graphql';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const CAPTURES_DIR = resolve(SCRIPT_DIR, 'captures');
@@ -93,11 +92,17 @@ async function graphql<T = unknown>(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
+    Origin: 'https://forkable.com',
+    Referer: 'https://forkable.com/mc/',
     'User-Agent':
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
   };
   const cookie = cookieHeader(jar);
   if (cookie) headers.Cookie = cookie;
+
+  if (process.env.DEBUG === '1') {
+    log(`  → POST ${url} (cookies: ${[...jar.keys()].join(', ') || 'none'})`);
+  }
 
   const res = await fetch(url, {
     method: 'POST',
@@ -106,8 +111,11 @@ async function graphql<T = unknown>(
   });
 
   applySetCookies(jar, res.headers);
-
   const text = await res.text();
+
+  if (process.env.DEBUG === '1') {
+    log(`  ← ${res.status} ${res.statusText} (${text.length}B)`);
+  }
   if (!res.ok) {
     throw new Error(`HTTP ${res.status} ${res.statusText} from ${url}: ${text.slice(0, 500)}`);
   }
@@ -116,23 +124,13 @@ async function graphql<T = unknown>(
 
 // ─── Auth flow (PRD §7.1) ───────────────────────────────────────────────────
 
-const IDENTITIES_QUERY = `
-  query identities($email: String!) {
-    identities(email: $email) {
-      integration { type provider loginUrl allowSsoPasswordLogin }
-    }
-  }
-`;
-
-const CREATE_SESSION_MUTATION = `
-  mutation createSession($input: CreateSessionInput!) {
-    createSession(input: $input) {
-      user { id email mfaEnabled }
-      errorAttributes
-      errorDetails
-    }
-  }
-`;
+// IMPORTANT: keep this on a single line. The Forkable edge (AWS ALB +
+// Phusion Passenger) returns 401 for createSession requests whose `query`
+// field starts with leading whitespace/newlines from a template literal.
+// Reproduced repeatedly during the M1 spike — single-line works, multi-line
+// 401s with the same cookies/headers/variables.
+const CREATE_SESSION_MUTATION =
+  'mutation createSession($input: CreateSessionInput!) { createSession(input: $input) { user { id email mfaEnabled } errorAttributes errorDetails } }';
 
 const ME_QUERY = 'query me { me { id email mfaEnabled } }';
 
@@ -144,29 +142,47 @@ type CreateSessionData = {
   };
 };
 
-type IdentitiesData = {
-  identities: Array<{
-    integration: { type: string; provider: string; allowSsoPasswordLogin: boolean };
-  }>;
-};
-
 type MeData = { me: { id: string; email: string; mfaEnabled: boolean } | null };
 
-async function login(email: string, password: string, jar: CookieJar): Promise<string> {
-  // Step 1: identities lookup (the SPA does this; useful sanity check)
-  const idRes = await graphql<IdentitiesData>(
-    FORKABLE_PUBLIC_GRAPHQL,
-    { query: IDENTITIES_QUERY, variables: { email } },
-    jar,
+async function warmup(jar: CookieJar): Promise<void> {
+  // /api/v2/graphql is fronted by an AWS load balancer with sticky-session
+  // cookies (AWSALBTG/AWSALBTGCORS) per target group. Cookies set by /mc/
+  // point to a different target group than the API server expects, so an
+  // anonymous POST to /api/v2/graphql returns 401 — but in the same response
+  // helpfully sets *fresh* cookies for the API target group. We discard the
+  // 401, keep those cookies, and proceed.
+  const res = await fetch('https://forkable.com/api/v2/graphql', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Origin: 'https://forkable.com',
+      Referer: 'https://forkable.com/mc/',
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    },
+    body: JSON.stringify({ query: '{__typename}' }),
+  });
+  // Drain body so the connection is reusable.
+  await res.text();
+  applySetCookies(jar, res.headers);
+  log(
+    `warmup POST /api/v2/graphql → ${res.status} (${jar.size} sticky cookie${jar.size === 1 ? '' : 's'} captured)`,
   );
-  const identity = idRes.data?.identities?.[0]?.integration;
-  if (identity) {
-    log(`identities lookup → provider=${identity.provider} type=${identity.type}`);
-  } else {
-    log('identities lookup → no integrations returned (proceeding with password auth)');
-  }
+}
 
-  // Step 2: createSession
+async function login(email: string, password: string, jar: CookieJar): Promise<string> {
+  // Step 0: warmup — acquire AWS load-balancer sticky-session cookies for the
+  // /api/v2/graphql target group. Without these, /api/v2/graphql returns 401.
+  await warmup(jar);
+
+  // Step 1 (skipped): identities lookup. The SPA does this against
+  // /public/graphql, but that endpoint sits on a different load-balancer
+  // target group and overwrites our AWSALBTG cookie with one that
+  // /api/v2/graphql will reject. Skipping it preserves the auth-endpoint
+  // cookie and goes straight to login.
+
+  // Step 2: createSession on the authenticated endpoint.
   const loginRes = await graphql<CreateSessionData>(
     FORKABLE_GRAPHQL,
     {
