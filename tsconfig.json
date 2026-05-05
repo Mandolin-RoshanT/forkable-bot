@@ -26,6 +26,6 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*", "scripts/**/*", "tests/**/*", "codegen.ts"],
+  "include": ["scripts/**/*"],
   "exclude": ["node_modules", "dist", "scripts/captures"]
 }
