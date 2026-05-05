@@ -1,14 +1,12 @@
-// Hand-rolled cookie jar (no `tough-cookie` dep). Forkable sets only a
-// handful of cookies and we don't need domain/path matching.
+// Hand-rolled cookie jar — no domain/path matching needed.
 
 import type { Cookie, CookieJar } from './types.ts';
 
 function parseSetCookies(headers: Headers): Cookie[] {
-  // Bun + Node 18 expose getSetCookie() at runtime but DOM lib types lag.
+  // Bun/Node 18 expose getSetCookie() at runtime but DOM types lag.
   const headersAny = headers as unknown as { getSetCookie?: () => string[] };
   const setCookieLines = headersAny.getSetCookie?.() ?? [];
 
-  // Each line: "AWSALB=abc; Path=/; ..." — keep only the first name=value pair.
   const cookies: Cookie[] = [];
   for (const rawLine of setCookieLines) {
     const firstPair = rawLine.split(';')[0]?.trim();

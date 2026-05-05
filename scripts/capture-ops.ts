@@ -1,135 +1,23 @@
-/**
- * M1 spike: verify Forkable login and capture GraphQL operation responses.
- *
- *   bun run spike            # login + me + replay queries from captures/raw/
- *   bun run spike --mutate   # also replay mutations (DESTRUCTIVE — swaps real meals)
- *
- * See scripts/CAPTURE.md for the DevTools protocol.
- * Shared helpers live in scripts/lib/ — this file only orchestrates the
- * Forkable-specific auth flow and capture replay.
- */
+// M1 spike: log in and replay GraphQL ops captured from DevTools.
+//
+//   bun run spike            # queries only
+//   bun run spike --mutate   # also replay mutations (DESTRUCTIVE)
+//
+// See scripts/CAPTURE.md for how to capture payloads.
 
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
-import { BROWSER_HEADERS, CAPTURES_DIR, FORKABLE_GRAPHQL, RAW_DIR } from './lib/constants.ts';
-import { applySetCookies } from './lib/cookies.ts';
+import { login, verifyMe } from './lib/auth.ts';
+import { CAPTURES_DIR, FORKABLE_GRAPHQL, RAW_DIR } from './lib/constants.ts';
 import { graphql } from './lib/graphql.ts';
-import { log, logError, redactCookie, redactEmail } from './lib/logging.ts';
-import type { CapturedOp, CookieJar, ForkableUser, GraphQLBody } from './lib/types.ts';
-
-// ─── Auth flow (PRD §7.1) ───────────────────────────────────────────────────
-
-// IMPORTANT — must stay on one line. Forkable's edge (AWS ALB + Phusion
-// Passenger) returns 401 if `query` has leading whitespace from a template
-// literal. Verified during M1 spike with otherwise-identical requests.
-const CREATE_SESSION_MUTATION =
-  'mutation createSession($input: CreateSessionInput!) { createSession(input: $input) { user { id email mfaEnabled } errorAttributes errorDetails } }';
-
-const ME_QUERY = 'query me { me { id email mfaEnabled } }';
-
-type CreateSessionData = {
-  createSession: {
-    user: ForkableUser | null;
-    errorAttributes: unknown;
-    errorDetails: unknown;
-  };
-};
-
-type MeData = { me: ForkableUser | null };
-
-async function warmup(jar: CookieJar): Promise<void> {
-  // Intentional 401: this seeds the ALB sticky cookies needed for later requests.
-  // `graphql()` is not used here because it throws on non-2xx.
-  const cookiesBefore = jar.size;
-
-  const res = await fetch(FORKABLE_GRAPHQL, {
-    method: 'POST',
-    headers: BROWSER_HEADERS,
-    body: JSON.stringify({ query: '{__typename}' }),
-  });
-  // Only Set-Cookie headers matter from this call.
-  await res.text();
-  applySetCookies(jar, res.headers);
-
-  const captured = jar.size - cookiesBefore;
-  const plural = captured === 1 ? '' : 's';
-  log(
-    `warmup POST ${FORKABLE_GRAPHQL} → ${res.status} (${captured} sticky cookie${plural} captured)`,
-  );
-}
-
-function pickSessionCookieName(jar: CookieJar): string | undefined {
-  // Prefer names that look session-related.
-  const names = [...jar.keys()];
-  for (const name of names) {
-    if (name.toLowerCase().includes('session')) {
-      return name;
-    }
-  }
-  return names[0];
-}
-
-async function login(email: string, password: string, jar: CookieJar): Promise<string> {
-  await warmup(jar);
-
-  // Skip SPA's `/public/graphql` identities call; it can swap in the wrong ALB cookie.
-
-  const loginRes = await graphql<CreateSessionData>(
-    FORKABLE_GRAPHQL,
-    {
-      operationName: 'createSession',
-      query: CREATE_SESSION_MUTATION,
-      variables: { input: { email, password } },
-    },
-    jar,
-  );
-
-  if (loginRes.errors && loginRes.errors.length > 0) {
-    throw new Error(`createSession GraphQL errors: ${JSON.stringify(loginRes.errors)}`);
-  }
-
-  const session = loginRes.data?.createSession;
-  if (!session || !session.user) {
-    const errAttrs = JSON.stringify(session?.errorAttributes);
-    const errDetails = JSON.stringify(session?.errorDetails);
-    throw new Error(
-      `createSession returned no user. errorAttributes=${errAttrs} errorDetails=${errDetails}`,
-    );
-  }
-
-  if (session.user.mfaEnabled) {
-    throw new Error('MFA is enabled on this account — bot cannot proceed (PRD §7.1).');
-  }
-  log(`createSession → ok (user ${session.user.id}, mfa: false)`);
-
-  const sessionCookieName = pickSessionCookieName(jar);
-  if (!sessionCookieName) {
-    throw new Error('createSession returned no Set-Cookie — auth flow broken');
-  }
-  const cookieValue = jar.get(sessionCookieName) ?? '';
-  log(`cookie attached: ${sessionCookieName}=${redactCookie(cookieValue)}`);
-
-  return session.user.id;
-}
-
-async function verifyMe(jar: CookieJar): Promise<void> {
-  const res = await graphql<MeData>(FORKABLE_GRAPHQL, { query: ME_QUERY }, jar);
-
-  if (res.errors && res.errors.length > 0) {
-    throw new Error(`me query errors: ${JSON.stringify(res.errors)}`);
-  }
-  if (!res.data || !res.data.me) {
-    throw new Error('me returned null — session cookie not accepted');
-  }
-  log(`me → ok (user ${res.data.me.id})`);
-}
+import { log, logError, redactEmail } from './lib/logging.ts';
+import type { CapturedOp, CookieJar, GraphQLBody } from './lib/types.ts';
 
 // ─── Capture replay ─────────────────────────────────────────────────────────
 
 function isMutation(query: string): boolean {
-  // Handles `mutation`, `mutation Foo`, and `mutation(...)`.
   return /^\s*mutation[\s({]/.test(query);
 }
 

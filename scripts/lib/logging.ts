@@ -1,6 +1,4 @@
-// Spike logging: prefix every line with `[capture-ops]`, redact PII before
-// it hits stdout. Three levels — info goes to stdout, error to stderr, debug
-// is suppressed unless DEBUG=1 is set in the environment.
+// info → stdout, error → stderr, debug → stdout iff DEBUG=1.
 
 export function log(msg: string): void {
   console.log(`[capture-ops] ${msg}`);

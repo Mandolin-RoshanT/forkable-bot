@@ -1,5 +1,4 @@
-// Endpoint-agnostic GraphQL POST. Forkable-specific concerns (warmup, auth,
-// mutation strings) live in the caller — see scripts/capture-ops.ts.
+// Endpoint-agnostic GraphQL POST.
 
 import { BROWSER_HEADERS } from './constants.ts';
 import { applySetCookies, cookieHeader } from './cookies.ts';
@@ -11,7 +10,6 @@ export async function graphql<T = unknown>(
   body: GraphQLBody,
   jar: CookieJar,
 ): Promise<GraphQLResponse<T>> {
-  // Spread = Python's `{**dict}` — copy then layer cookies on top.
   const headers: Record<string, string> = { ...BROWSER_HEADERS };
   const cookie = cookieHeader(jar);
   if (cookie) {
