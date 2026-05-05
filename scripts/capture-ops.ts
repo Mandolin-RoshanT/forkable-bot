@@ -17,7 +17,7 @@ import { BROWSER_HEADERS, CAPTURES_DIR, FORKABLE_GRAPHQL, RAW_DIR } from './lib/
 import { applySetCookies } from './lib/cookies.ts';
 import { graphql } from './lib/graphql.ts';
 import { log, logError, redactCookie, redactEmail } from './lib/logging.ts';
-import type { CapturedOp, CookieJar, GraphQLBody } from './lib/types.ts';
+import type { CapturedOp, CookieJar, ForkableUser, GraphQLBody } from './lib/types.ts';
 
 // ─── Auth flow (PRD §7.1) ───────────────────────────────────────────────────
 
@@ -31,13 +31,13 @@ const ME_QUERY = 'query me { me { id email mfaEnabled } }';
 
 type CreateSessionData = {
   createSession: {
-    user: { id: string; email: string; mfaEnabled: boolean } | null;
+    user: ForkableUser | null;
     errorAttributes: unknown;
     errorDetails: unknown;
   };
 };
 
-type MeData = { me: { id: string; email: string; mfaEnabled: boolean } | null };
+type MeData = { me: ForkableUser | null };
 
 async function warmup(jar: CookieJar): Promise<void> {
   // Intentional 401: this seeds the ALB sticky cookies needed for later requests.
@@ -214,19 +214,19 @@ async function replayOne(file: string, body: GraphQLBody, jar: CookieJar): Promi
   const opName = basename(file, '.json');
   try {
     const res = await graphql(FORKABLE_GRAPHQL, body, jar);
-    const outPath = join(CAPTURES_DIR, `${opName}.json`);
+    const outPath = join(CAPTURES_DIR, file);
     const json = JSON.stringify(res, null, 2);
     writeFileSync(outPath, json);
 
     if (res.errors && res.errors.length > 0) {
       const errSnippet = JSON.stringify(res.errors).slice(0, 200);
-      log(`  ${opName} → GraphQL errors: ${errSnippet}`);
+      logError(`  ${opName} → GraphQL errors: ${errSnippet}`);
     } else {
       const sizeKB = (json.length / 1024).toFixed(1);
-      log(`  ${opName} → ok, ${sizeKB}KB → scripts/captures/${opName}.json`);
+      log(`  ${opName} → ok, ${sizeKB}KB → scripts/captures/${file}`);
     }
   } catch (err) {
-    log(`  ${opName} → FAILED: ${(err as Error).message}`);
+    logError(`  ${opName} → FAILED: ${(err as Error).message}`);
   }
 }
 
