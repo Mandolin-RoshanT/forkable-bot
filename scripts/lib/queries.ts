@@ -1,10 +1,10 @@
-// Keep every operation on ONE line — Forkable's edge 401s on leading
-// whitespace from template literals.
+// Auth queries live in src/queries/forkable.ts (canonical); this file
+// re-exports them and adds the spike-only INTROSPECTION_QUERY.
+//
+// IMPORTANT: keep every operation string single-line — Forkable's edge 401s
+// on leading whitespace from template literals.
 
-export const CREATE_SESSION_MUTATION =
-  'mutation createSession($input: CreateSessionInput!) { createSession(input: $input) { user { id email mfaEnabled } errorAttributes errorDetails } }';
-
-export const ME_QUERY = 'query me { me { id email mfaEnabled } }';
+export { CREATE_SESSION_MUTATION, ME_QUERY } from '../../src/queries/forkable.ts';
 
 // Forkable currently disables introspection; kept to detect if they re-enable it.
 export const INTROSPECTION_QUERY =

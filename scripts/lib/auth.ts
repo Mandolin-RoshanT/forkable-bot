@@ -60,7 +60,7 @@ export async function login(
   const loginRes = await graphql<CreateSessionData>(
     FORKABLE_GRAPHQL,
     {
-      operationName: 'createSession',
+      operationName: 'CreateSession',
       query: CREATE_SESSION_MUTATION,
       variables: { input: { email, password } },
     },

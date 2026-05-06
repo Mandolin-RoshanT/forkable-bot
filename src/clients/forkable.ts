@@ -5,6 +5,7 @@
 // matching Zod schema — schema drift surfaces as a typed error here, not as
 // a silent `undefined` deeper in the picker.
 
+import { BROWSER_HEADERS, FORKABLE_GRAPHQL } from '../lib/constants.ts';
 import { CookieJar } from '../lib/cookie-jar.ts';
 import type { Logger } from '../logger.ts';
 import { redactCookie } from '../logger.ts';
@@ -25,18 +26,6 @@ import {
   MeResponseSchema,
   type Menu,
 } from '../schemas/forkable.ts';
-
-const FORKABLE_GRAPHQL = 'https://forkable.com/api/v2/graphql';
-
-const BROWSER_HEADERS: Record<string, string> = {
-  'Content-Type': 'application/json',
-  Accept: 'application/json',
-  Origin: 'https://forkable.com',
-  Referer: 'https://forkable.com/mc/',
-  'Forkable-Referrer': 'mc',
-  'User-Agent':
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-};
 
 // ─── Typed errors ──────────────────────────────────────────────────────────
 

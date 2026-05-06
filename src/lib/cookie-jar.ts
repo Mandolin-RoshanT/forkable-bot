@@ -27,10 +27,6 @@ export class CookieJar {
     return this.cookies.size;
   }
 
-  has(name: string): boolean {
-    return this.cookies.has(name);
-  }
-
   get(name: string): string | undefined {
     return this.cookies.get(name);
   }
