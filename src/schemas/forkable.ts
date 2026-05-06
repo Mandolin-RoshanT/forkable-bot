@@ -7,7 +7,7 @@ import { z } from 'zod';
 // ─── Auth ──────────────────────────────────────────────────────────────────
 
 export const ForkableUserSchema = z.object({
-  id: z.string(),
+  id: z.number(),
   email: z.string(),
   mfaEnabled: z.boolean(),
 });

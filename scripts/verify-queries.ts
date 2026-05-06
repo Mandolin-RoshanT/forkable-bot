@@ -1,25 +1,14 @@
-// Live integration check for src/queries/ + src/schemas/.
-// Logs in, runs each read-only query against forkable.com, and parses the
-// response with the matching Zod schema. The mutation is NOT exercised.
+// Live integration check: exercises ForkableClient against forkable.com,
+// running each read-only method and printing what came back. The mutation
+// is NOT exercised.
 //
-//   bun scripts/verify-queries.ts
+//   bun scripts/verify-queries.ts                # this week
+//   bun scripts/verify-queries.ts 2026-05-04     # specific Monday
 
-import {
-  GET_ALTERNATIVES_QUERY,
-  GET_WEEK_QUERY,
-  type GetAlternativesVariables,
-  type GetWeekVariables,
-} from '../src/queries/forkable.ts';
-import { GetAlternativesResponseSchema, GetWeekResponseSchema } from '../src/schemas/forkable.ts';
-import { login } from './lib/auth.ts';
-import { FORKABLE_GRAPHQL } from './lib/constants.ts';
-import { graphql } from './lib/graphql.ts';
-import { log, logError, redactEmail } from './lib/logging.ts';
-import type { CookieJar } from './lib/types.ts';
+import { ForkableClient } from '../src/clients/forkable.ts';
+import { loadSettings } from '../src/config.ts';
+import { createLogger, redactEmail } from '../src/logger.ts';
 
-// This week's Monday in ISO 8601 (YYYY-MM-DD). We default to *this* week's
-// Monday so the live verify exercises real data; the production picker uses
-// next Monday at cron time. CLI arg overrides for ad-hoc checking.
 function thisWeekMonday(): string {
   const today = new Date();
   const dayOfWeek = today.getDay();
@@ -30,85 +19,61 @@ function thisWeekMonday(): string {
 }
 
 async function main(): Promise<void> {
-  const email = process.env.FORKABLE_EMAIL;
-  const password = process.env.FORKABLE_PASSWORD;
-  if (!email || !password) {
-    logError('FORKABLE_EMAIL and FORKABLE_PASSWORD must be set in .env');
-    process.exit(1);
-  }
-  log(`account: ${redactEmail(email)}`);
+  // OpenAI/Resend keys aren't used by this script; stub them so we don't
+  // need them in .env to run a forkable-only check.
+  const settings = loadSettings({
+    ...process.env,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'unused-in-verify',
+    RESEND_API_KEY: process.env.RESEND_API_KEY || 'unused-in-verify',
+    NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
+    NOTIFY_FROM_EMAIL: process.env.NOTIFY_FROM_EMAIL || 'noreply@example.com',
+  });
+  const logger = createLogger(settings);
+  logger.info(`account: ${redactEmail(settings.forkable.email)}`);
 
-  const jar: CookieJar = new Map();
-  await login(email, password, jar);
+  const client = new ForkableClient(settings, logger);
+  await client.login();
+  await client.me();
 
   // ─── GET_WEEK ─────────────────────────────────────────────────────────────
   const from = process.argv[2] ?? thisWeekMonday();
-  log(`\n--- GetWeek(from: ${from}) ---`);
-  const weekRaw = await graphql(
-    FORKABLE_GRAPHQL,
-    {
-      operationName: 'GetWeek',
-      query: GET_WEEK_QUERY,
-      variables: { from } satisfies GetWeekVariables,
-    },
-    jar,
-  );
-  if (weekRaw.errors && weekRaw.errors.length > 0) {
-    logError(`GetWeek errors: ${JSON.stringify(weekRaw.errors)}`);
-    process.exit(2);
-  }
-  const week = GetWeekResponseSchema.parse(weekRaw.data);
-  log(`✓ GetWeek parsed: ${week.myDeliveries.length} day(s)`);
-  for (const d of week.myDeliveries) {
+  logger.info(`\n--- GetWeek(from: ${from}) ---`);
+  const days = await client.getWeek(from);
+  logger.info(`✓ GetWeek parsed: ${days.length} day(s)`);
+  for (const d of days) {
     const piece = d.orders.find((o) => o.pieces.length > 0)?.pieces[0];
     const editable = d.isReadOnly ? 'locked' : 'editable';
-    log(
+    logger.info(
       `    ${d.forDeliveryAt.slice(0, 10)} | ${editable.padEnd(8)} | current: ${piece?.name ?? '(none)'}`,
     );
   }
 
   // ─── GET_ALTERNATIVES ─────────────────────────────────────────────────────
-  const editableDay = week.myDeliveries.find((d) => !d.isReadOnly);
-  if (!editableDay) {
-    log('\nno editable days in this week — skipping GetAlternatives check');
+  const editable = days.find((d) => !d.isReadOnly);
+  if (!editable) {
+    logger.info('\nno editable days in this week — skipping GetAlternatives check');
     return;
   }
-  if (!editableDay.club) {
-    logError('editable day has no club.id — cannot run GetAlternatives');
+  if (!editable.club) {
+    logger.error('editable day has no club.id — cannot run GetAlternatives');
     process.exit(2);
   }
 
-  log(
-    `\n--- GetAlternatives(ids: [${editableDay.availableMenuIds.join(',')}], clubId: ${editableDay.club.id}) ---`,
+  logger.info(
+    `\n--- GetAlternatives(ids: [${editable.availableMenuIds.join(',')}], clubId: ${editable.club.id}) ---`,
   );
-  const altRaw = await graphql(
-    FORKABLE_GRAPHQL,
-    {
-      operationName: 'GetAlternatives',
-      query: GET_ALTERNATIVES_QUERY,
-      variables: {
-        ids: editableDay.availableMenuIds,
-        clubId: editableDay.club.id,
-      } satisfies GetAlternativesVariables,
-    },
-    jar,
-  );
-  if (altRaw.errors && altRaw.errors.length > 0) {
-    logError(`GetAlternatives errors: ${JSON.stringify(altRaw.errors)}`);
-    process.exit(2);
-  }
-  const alts = GetAlternativesResponseSchema.parse(altRaw.data);
-  const totalItems = alts.menus.flatMap((m) => m.sections).flatMap((s) => s.items).length;
-  log(`✓ GetAlternatives parsed: ${alts.menus.length} venue(s), ${totalItems} items total`);
-  for (const m of alts.menus) {
+  const menus = await client.getAlternatives(editable.availableMenuIds, editable.club.id);
+  const totalItems = menus.flatMap((m) => m.sections).flatMap((s) => s.items).length;
+  logger.info(`✓ GetAlternatives parsed: ${menus.length} venue(s), ${totalItems} items total`);
+  for (const m of menus) {
     const itemCount = m.sections.flatMap((s) => s.items).length;
-    log(`    ${(m.displayName ?? m.name).padEnd(28)} | ${itemCount} items`);
+    logger.info(`    ${(m.displayName ?? m.name).padEnd(28)} | ${itemCount} items`);
   }
 
-  log('\nall queries + schemas verified live ✓');
+  logger.info('\nForkableClient verified live ✓');
 }
 
 main().catch((err: Error) => {
-  logError(`FAILED: ${err.message}`);
+  console.error(`[forkable-bot] FAILED: ${err.message}`);
   process.exit(1);
 });
