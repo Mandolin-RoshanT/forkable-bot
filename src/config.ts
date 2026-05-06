@@ -3,7 +3,7 @@
 
 import { z } from 'zod';
 
-export const SettingsSchema = z.object({
+const SettingsSchema = z.object({
   forkable: z.object({
     email: z.string().email(),
     password: z.string().min(1),

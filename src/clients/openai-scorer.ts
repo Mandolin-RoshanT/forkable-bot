@@ -62,8 +62,10 @@ export class OpenAIScorer {
   }
 }
 
-// Trim the candidate to fields we actually want the LLM to weigh.
-function serialize(c: MealCandidate): Record<string, unknown> {
+// Trim the candidate to fields we actually want the LLM to weigh. Kept
+// explicit (rather than `JSON.stringify(c)`) so adding internal fields
+// to MealCandidate doesn't silently widen the prompt.
+function serialize(c: MealCandidate): MealCandidate {
   return {
     name: c.name,
     description: c.description,

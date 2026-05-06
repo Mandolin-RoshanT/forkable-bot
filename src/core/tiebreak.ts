@@ -1,8 +1,7 @@
 // Pure tiebreak logic. Caller has already filtered candidates down to a
-// single bucket; we pick one. Rules locked at M1 review:
+// single bucket; we pick one.
 //   1. Lower price wins.
 //   2. Restaurant variety: prefer a venue not already picked this week.
-//   3. (Deferred to v2) Previously-ordered familiarity.
 // Stable: caller's order wins on a true tie.
 
 import type { Bucket } from '../models.ts';

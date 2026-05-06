@@ -9,7 +9,7 @@ import type { WeekResult } from '../models.ts';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 
-export type ResendConfig = {
+type ResendConfig = {
   apiKey: string;
   from: string;
   to: string;
