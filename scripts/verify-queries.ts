@@ -68,7 +68,6 @@ async function main(): Promise<void> {
   }
 
   // ─── GET_ALTERNATIVES ─────────────────────────────────────────────────────
-  // Pick the first editable day to query alternatives for.
   const editableDay = week.myDeliveries.find((d) => !d.isReadOnly);
   if (!editableDay) {
     log('\nno editable days in this week — skipping GetAlternatives check');
