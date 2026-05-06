@@ -8,7 +8,8 @@
 import { ForkableClient } from '../src/clients/forkable.ts';
 import { loadSettings } from '../src/config.ts';
 import { thisWeekMonday } from '../src/lib/dates.ts';
-import { createLogger, redactEmail } from '../src/logger.ts';
+import { redactEmail } from '../src/lib/redact.ts';
+import { createLogger } from '../src/logger.ts';
 
 async function main(): Promise<void> {
   // OpenAI/Resend keys aren't used by this script; stub them so we don't

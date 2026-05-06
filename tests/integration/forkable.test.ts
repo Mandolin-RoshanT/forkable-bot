@@ -10,11 +10,11 @@ import { http, HttpResponse } from 'msw';
 
 import {
   ForkableAuthError,
-  ForkableClient,
   ForkableError,
   ForkableNetworkError,
   ForkableSchemaError,
-} from '../../src/clients/forkable.ts';
+} from '../../src/clients/forkable-errors.ts';
+import { ForkableClient } from '../../src/clients/forkable.ts';
 import type { Settings } from '../../src/config.ts';
 import {
   FORKABLE_GRAPHQL,

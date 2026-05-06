@@ -100,6 +100,7 @@ Three layers with a one-way dependency rule (Biome enforces it):
 src/
 ├── clients/                  boundaries — talk to the outside world
 │   ├── forkable.ts           ForkableClient (login, getWeek, getAlternatives, swapMeal)
+│   ├── forkable-errors.ts    typed errors thrown by ForkableClient
 │   ├── openai-scorer.ts      OpenAIScorer (LLM scoring, falls back to red on parse failure)
 │   ├── resend-mailer.ts      ResendMailer.fromEnv() (sendFailure)
 │   └── run-log-writer.ts     CsvRunLogWriter — per-week CSV
@@ -107,14 +108,17 @@ src/
 │   ├── picker.ts             pickWeek(args) — locked decisions (skip ORDERED, skip if default wins, all-red keeps default)
 │   ├── tiebreak.ts           breakTie(candidates, picksThisWeek) — price → venue variety → input order
 │   └── run-log.ts            buildRows + toCsv (RFC-4180 escaping)
-├── lib/                      small utilities (constants, cookie-jar, dates, exhaustive)
+├── commands/                 one file per CLI subcommand
+│   ├── show-week.ts          show-week — read-only week dump (with optional scoring)
+│   └── run-picker.ts         pick / dry-run — score, swap, write CSV, failure-email on throw
+├── lib/                      small utilities (constants, cookie-jar, dates, delivery, menus, cli-format, redact, exhaustive)
 ├── queries/forkable.ts       GraphQL operation strings + variable types
 ├── schemas/forkable.ts       zod schemas — runtime validation + inferred types
 ├── config.ts                 loadSettings(env) — zod-validated env
 ├── logger.ts                 createLogger(settings) — scrubs secrets
 ├── models.ts                 domain types (Bucket, Score, MealCandidate, DayResult, WeekResult)
 ├── rubric.md                 fat-loss prompt loaded at runtime
-├── cli.ts                    show-week / dry-run / pick subcommand dispatch
+├── cli.ts                    subcommand dispatch (show-week | dry-run | pick)
 └── index.ts                  thin entry point with top-level catch
 ```
 
