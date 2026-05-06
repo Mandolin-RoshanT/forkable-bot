@@ -31,7 +31,7 @@ async function main(): Promise<void> {
   const logger = createLogger(settings);
   logger.info(`account: ${redactEmail(settings.forkable.email)}`);
 
-  const client = new ForkableClient(settings, logger);
+  const client = new ForkableClient(settings.forkable, logger);
   await client.login();
   await client.me();
 

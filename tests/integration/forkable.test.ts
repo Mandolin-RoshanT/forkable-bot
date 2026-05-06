@@ -86,7 +86,7 @@ describe('ForkableClient — happy paths', () => {
       }),
     );
 
-    const client = new ForkableClient(baseSettings, silentLogger);
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
     const user = await client.login();
     expect(user.id).toBe(305827);
     expect(user.email).toBe('test@example.com');
@@ -109,7 +109,7 @@ describe('ForkableClient — happy paths', () => {
       }),
     );
 
-    const client = new ForkableClient(baseSettings, silentLogger);
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
     const me = await client.me();
     expect(me.id).toBe(305827);
@@ -132,7 +132,7 @@ describe('ForkableClient — happy paths', () => {
       }),
     );
 
-    const client = new ForkableClient(baseSettings, silentLogger);
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
     const days = await client.getWeek('2026-05-04');
     expect(days).toHaveLength(5);
@@ -156,7 +156,7 @@ describe('ForkableClient — happy paths', () => {
       }),
     );
 
-    const client = new ForkableClient(baseSettings, silentLogger);
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
     const menus = await client.getAlternatives([15167, 17003, 17826, 13408], 6059);
     expect(menus.length).toBeGreaterThan(0);
@@ -185,7 +185,7 @@ describe('ForkableClient — auth errors', () => {
       }),
     );
 
-    const client = new ForkableClient(baseSettings, silentLogger);
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await expect(client.login()).rejects.toBeInstanceOf(ForkableAuthError);
   });
 
@@ -208,7 +208,7 @@ describe('ForkableClient — auth errors', () => {
       }),
     );
 
-    const client = new ForkableClient(baseSettings, silentLogger);
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await expect(client.login()).rejects.toThrow(/MFA/);
   });
 
@@ -225,8 +225,18 @@ describe('ForkableClient — auth errors', () => {
       }),
     );
 
-    const client = new ForkableClient(baseSettings, silentLogger);
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await expect(client.login()).rejects.toThrow(/no new cookies/);
+  });
+
+  test('me() throws when called before login()', async () => {
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
+    await expect(client.me()).rejects.toThrow(/must login/);
+  });
+
+  test('getWeek() throws when called before login()', async () => {
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
+    await expect(client.getWeek('2026-05-04')).rejects.toThrow(/must login/);
   });
 
   test('me() throws ForkableAuthError when session cookie not accepted', async () => {
@@ -245,7 +255,7 @@ describe('ForkableClient — auth errors', () => {
       }),
     );
 
-    const client = new ForkableClient(baseSettings, silentLogger);
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
     await expect(client.me()).rejects.toBeInstanceOf(ForkableAuthError);
   });
@@ -268,7 +278,7 @@ describe('ForkableClient — transport errors', () => {
       }),
     );
 
-    const client = new ForkableClient(baseSettings, silentLogger);
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
     try {
       await client.getWeek('2026-05-04');
@@ -295,7 +305,7 @@ describe('ForkableClient — transport errors', () => {
       }),
     );
 
-    const client = new ForkableClient(baseSettings, silentLogger);
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
     await expect(client.getWeek('2026-05-04')).rejects.toBeInstanceOf(ForkableSchemaError);
   });
@@ -317,7 +327,7 @@ describe('ForkableClient — transport errors', () => {
       }),
     );
 
-    const client = new ForkableClient(baseSettings, silentLogger);
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
     await expect(client.getWeek('2026-05-04')).rejects.toBeInstanceOf(ForkableError);
   });
