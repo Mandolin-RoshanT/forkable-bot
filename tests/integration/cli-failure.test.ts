@@ -5,19 +5,18 @@
 // (so we can assert a POST was made). Env vars are mutated and restored
 // around the test so we don't pollute other tests.
 
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
 
 import { run } from '../../src/cli.ts';
+import {
+  FORKABLE_GRAPHQL,
+  RESEND_ENDPOINT,
+  createTestServer,
+  graphqlHandler,
+} from '../fixtures/msw.ts';
 
-const FORKABLE_GRAPHQL = 'https://forkable.com/api/v2/graphql';
-const RESEND_ENDPOINT = 'https://api.resend.com/emails';
-
-const server = setupServer();
-beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
+const server = createTestServer({ onUnhandledRequest: 'bypass' });
 
 // ─── env helpers ──────────────────────────────────────────────────────────
 
@@ -51,20 +50,10 @@ describe('runPicker failure → mailer.sendFailure', () => {
     const resendCalls: { subject: string; text: string }[] = [];
 
     server.use(
-      // Forkable: warmup OK, but createSession returns "no user" → ForkableAuthError.
-      http.post(FORKABLE_GRAPHQL, async ({ request }) => {
-        const body = (await request.clone().json()) as {
-          operationName?: string;
-          query: string;
-        };
-        if (body.query?.includes('__typename')) {
-          return new HttpResponse(null, {
-            status: 401,
-            headers: { 'Set-Cookie': 'AWSALBTG=warm; Path=/' },
-          });
-        }
-        if (body.operationName === 'CreateSession') {
-          return HttpResponse.json({
+      // createSession returns "no user" → ForkableAuthError.
+      graphqlHandler({
+        CreateSession: () =>
+          HttpResponse.json({
             data: {
               createSession: {
                 user: null,
@@ -72,11 +61,9 @@ describe('runPicker failure → mailer.sendFailure', () => {
                 errorDetails: 'wrong password',
               },
             },
-          });
-        }
-        return HttpResponse.json({ errors: [{ message: 'unhandled' }] });
+          }),
       }),
-      // Resend: capture the POST so we can assert the failure email was sent.
+      // Capture the Resend POST so we can assert the failure email was sent.
       http.post(RESEND_ENDPOINT, async ({ request }) => {
         const body = (await request.json()) as { subject: string; text: string };
         resendCalls.push(body);

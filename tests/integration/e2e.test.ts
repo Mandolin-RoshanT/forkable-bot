@@ -5,25 +5,25 @@
 // that catches breaks at the seams (schema parse → picker decision →
 // client mutation → schema parse).
 
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { resolve } from 'node:path';
 import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
 
 import { ForkableClient } from '../../src/clients/forkable.ts';
 import { pickWeek } from '../../src/core/picker.ts';
-import type { Logger } from '../../src/logger.ts';
 import type { Score } from '../../src/models.ts';
+import {
+  FORKABLE_GRAPHQL,
+  createSessionOk,
+  createTestServer,
+  graphqlHandler,
+  meOk,
+  silentLogger,
+} from '../fixtures/msw.ts';
 
-const FORKABLE_GRAPHQL = 'https://forkable.com/api/v2/graphql';
 const CAPTURES = resolve(import.meta.dir, '../../scripts/captures');
 
-const silentLogger: Logger = { info: () => {}, error: () => {}, debug: () => {} };
-
-const server = setupServer();
-beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
+const server = createTestServer();
 
 // Stub scorer: "Beef Stew" wins green, everything else red. Beef Stew is
 // menuId=17826, itemId=33 in the captured alternatives — see swap-meal.json.
@@ -55,67 +55,30 @@ describe('e2e — pickWeek + ForkableClient + captures', () => {
     const replacePieceCalls: unknown[] = [];
 
     server.use(
+      // Inline first so we can capture variables from ReplacePiece before
+      // graphqlHandler dispatches by operationName.
       http.post(FORKABLE_GRAPHQL, async ({ request }) => {
         const body = (await request.clone().json()) as {
           operationName?: string;
-          query: string;
           variables?: unknown;
         };
-
-        // Warmup: anonymous { __typename } → 401 with ALB-style cookie.
-        if (body.query?.includes('__typename')) {
-          return new HttpResponse('Unauthorized', {
-            status: 401,
-            headers: { 'Set-Cookie': 'AWSALBTG=warmup-cookie; Path=/' },
-          });
+        if (body.operationName !== 'ReplacePiece') {
+          return undefined;
         }
-
-        switch (body.operationName) {
-          case 'CreateSession':
-            return HttpResponse.json(
-              {
-                data: {
-                  createSession: {
-                    user: { id: 305827, email: 'r@example.com', mfaEnabled: false },
-                    errorAttributes: null,
-                    errorDetails: null,
-                  },
-                },
-              },
-              { headers: { 'Set-Cookie': '_easyorder_session=session-cookie-aaa; Path=/' } },
-            );
-
-          case 'Me':
-            return HttpResponse.json({
-              data: { me: { id: 305827, email: 'r@example.com', mfaEnabled: false } },
-            });
-
-          case 'GetWeek':
-            return HttpResponse.json(fixedWeek);
-
-          case 'GetAlternatives':
-            return HttpResponse.json(capturedAlts);
-
-          case 'ReplacePiece':
-            replacePieceCalls.push(body.variables);
-            return HttpResponse.json({
-              data: {
-                replacePiece: {
-                  delivery: {
-                    id: 1175988,
-                    state: 'initial',
-                    isReadOnly: false,
-                    orders: [],
-                  },
-                },
-              },
-            });
-
-          default:
-            return HttpResponse.json({
-              errors: [{ message: `unhandled op: ${body.operationName}` }],
-            });
-        }
+        replacePieceCalls.push(body.variables);
+        return HttpResponse.json({
+          data: {
+            replacePiece: {
+              delivery: { id: 1175988, state: 'initial', isReadOnly: false, orders: [] },
+            },
+          },
+        });
+      }),
+      graphqlHandler({
+        CreateSession: createSessionOk,
+        Me: meOk,
+        GetWeek: () => HttpResponse.json(fixedWeek),
+        GetAlternatives: () => HttpResponse.json(capturedAlts),
       }),
     );
 
@@ -162,44 +125,18 @@ describe('e2e — pickWeek + ForkableClient + captures', () => {
 
     server.use(
       http.post(FORKABLE_GRAPHQL, async ({ request }) => {
-        const body = (await request.clone().json()) as {
-          operationName?: string;
-          query: string;
-        };
-        if (body.query?.includes('__typename')) {
-          return new HttpResponse(null, {
-            status: 401,
-            headers: { 'Set-Cookie': 'AWSALBTG=warm; Path=/' },
-          });
+        const body = (await request.clone().json()) as { operationName?: string };
+        if (body.operationName !== 'ReplacePiece') {
+          return undefined;
         }
-        switch (body.operationName) {
-          case 'CreateSession':
-            return HttpResponse.json(
-              {
-                data: {
-                  createSession: {
-                    user: { id: 305827, email: 'r@example.com', mfaEnabled: false },
-                    errorAttributes: null,
-                    errorDetails: null,
-                  },
-                },
-              },
-              { headers: { 'Set-Cookie': '_easyorder_session=cookie; Path=/' } },
-            );
-          case 'Me':
-            return HttpResponse.json({
-              data: { me: { id: 305827, email: 'r@example.com', mfaEnabled: false } },
-            });
-          case 'GetWeek':
-            return HttpResponse.json(fixedWeek);
-          case 'GetAlternatives':
-            return HttpResponse.json(capturedAlts);
-          case 'ReplacePiece':
-            replacePieceCalls.push(body);
-            return HttpResponse.json({ data: {} });
-          default:
-            return HttpResponse.json({ errors: [{ message: 'unhandled' }] });
-        }
+        replacePieceCalls.push(body);
+        return HttpResponse.json({ data: {} });
+      }),
+      graphqlHandler({
+        CreateSession: createSessionOk,
+        Me: meOk,
+        GetWeek: () => HttpResponse.json(fixedWeek),
+        GetAlternatives: () => HttpResponse.json(capturedAlts),
       }),
     );
 

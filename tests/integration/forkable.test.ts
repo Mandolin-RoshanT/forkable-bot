@@ -4,10 +4,9 @@
 // from the M1 captures), and assert the client's behavior — happy paths and
 // every typed-error path. No real network calls.
 
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { resolve } from 'node:path';
 import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
 
 import {
   ForkableAuthError,
@@ -17,16 +16,18 @@ import {
   ForkableSchemaError,
 } from '../../src/clients/forkable.ts';
 import type { Settings } from '../../src/config.ts';
-import type { Logger } from '../../src/logger.ts';
+import {
+  FORKABLE_GRAPHQL,
+  SESSION_COOKIE_HEADERS,
+  VALID_USER,
+  createSessionOk,
+  createTestServer,
+  graphqlHandler,
+  meOk,
+  silentLogger,
+} from '../fixtures/msw.ts';
 
-const FORKABLE_GRAPHQL = 'https://forkable.com/api/v2/graphql';
 const CAPTURES = resolve(import.meta.dir, '../../scripts/captures');
-
-const silentLogger: Logger = {
-  info: () => {},
-  error: () => {},
-  debug: () => {},
-};
 
 const baseSettings: Settings = {
   forkable: { email: 'test@example.com', password: 'pw' },
@@ -35,38 +36,7 @@ const baseSettings: Settings = {
   debug: false,
 };
 
-const VALID_USER = { id: 305827, email: 'test@example.com', mfaEnabled: false };
-
-const SESSION_COOKIE_HEADERS = {
-  'Set-Cookie': '_easyorder_session=AbCdEfGhIjKlMnOpQrStUvWxYz123456; Path=/; HttpOnly',
-};
-
-// ─── MSW lifecycle ────────────────────────────────────────────────────────
-
-const server = setupServer();
-beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
-
-// Helper: dispatch on operationName so one handler can serve a whole flow.
-function graphqlHandler(routes: Record<string, () => Response | Promise<Response>>) {
-  return http.post(FORKABLE_GRAPHQL, async ({ request }) => {
-    const body = (await request.json()) as { operationName?: string; query: string };
-    const op = body.operationName;
-    if (op && routes[op]) {
-      return routes[op]();
-    }
-    // The warmup POST is anonymous (`{__typename}`) — treat it as a 401 with
-    // ALB-like cookies so the client's warmup() captures them.
-    if (body.query?.includes('__typename')) {
-      return new HttpResponse('Unauthorized', {
-        status: 401,
-        headers: { 'Set-Cookie': 'AWSALBTG=warmup-cookie; Path=/' },
-      });
-    }
-    return HttpResponse.json({ errors: [{ message: `unhandled op: ${op}` }] });
-  });
-}
+const server = createTestServer();
 
 // ─── Happy paths ──────────────────────────────────────────────────────────
 
@@ -74,15 +44,7 @@ describe('ForkableClient — happy paths', () => {
   test('login() succeeds, captures cookies, returns user', async () => {
     server.use(
       graphqlHandler({
-        CreateSession: () =>
-          HttpResponse.json(
-            {
-              data: {
-                createSession: { user: VALID_USER, errorAttributes: null, errorDetails: null },
-              },
-            },
-            { headers: SESSION_COOKIE_HEADERS },
-          ),
+        CreateSession: createSessionOk,
       }),
     );
 
@@ -96,16 +58,8 @@ describe('ForkableClient — happy paths', () => {
   test('me() returns the authenticated user', async () => {
     server.use(
       graphqlHandler({
-        CreateSession: () =>
-          HttpResponse.json(
-            {
-              data: {
-                createSession: { user: VALID_USER, errorAttributes: null, errorDetails: null },
-              },
-            },
-            { headers: SESSION_COOKIE_HEADERS },
-          ),
-        Me: () => HttpResponse.json({ data: { me: VALID_USER } }),
+        CreateSession: createSessionOk,
+        Me: meOk,
       }),
     );
 
@@ -119,15 +73,7 @@ describe('ForkableClient — happy paths', () => {
     const capturedWeek = await Bun.file(`${CAPTURES}/get-week.json`).json();
     server.use(
       graphqlHandler({
-        CreateSession: () =>
-          HttpResponse.json(
-            {
-              data: {
-                createSession: { user: VALID_USER, errorAttributes: null, errorDetails: null },
-              },
-            },
-            { headers: SESSION_COOKIE_HEADERS },
-          ),
+        CreateSession: createSessionOk,
         GetWeek: () => HttpResponse.json(capturedWeek),
       }),
     );
@@ -143,15 +89,7 @@ describe('ForkableClient — happy paths', () => {
     const capturedAlts = await Bun.file(`${CAPTURES}/get-alternatives.json`).json();
     server.use(
       graphqlHandler({
-        CreateSession: () =>
-          HttpResponse.json(
-            {
-              data: {
-                createSession: { user: VALID_USER, errorAttributes: null, errorDetails: null },
-              },
-            },
-            { headers: SESSION_COOKIE_HEADERS },
-          ),
+        CreateSession: createSessionOk,
         GetAlternatives: () => HttpResponse.json(capturedAlts),
       }),
     );
@@ -208,15 +146,7 @@ describe('ForkableClient — happy paths', () => {
       }),
       // Fallback for warmup + CreateSession.
       graphqlHandler({
-        CreateSession: () =>
-          HttpResponse.json(
-            {
-              data: {
-                createSession: { user: VALID_USER, errorAttributes: null, errorDetails: null },
-              },
-            },
-            { headers: SESSION_COOKIE_HEADERS },
-          ),
+        CreateSession: createSessionOk,
       }),
     );
 
@@ -334,15 +264,7 @@ describe('ForkableClient — auth errors', () => {
   test('me() throws ForkableAuthError when session cookie not accepted', async () => {
     server.use(
       graphqlHandler({
-        CreateSession: () =>
-          HttpResponse.json(
-            {
-              data: {
-                createSession: { user: VALID_USER, errorAttributes: null, errorDetails: null },
-              },
-            },
-            { headers: SESSION_COOKIE_HEADERS },
-          ),
+        CreateSession: createSessionOk,
         Me: () => HttpResponse.json({ data: { me: null } }),
       }),
     );
@@ -357,15 +279,7 @@ describe('ForkableClient — transport errors', () => {
   test('throws ForkableNetworkError on 500', async () => {
     server.use(
       graphqlHandler({
-        CreateSession: () =>
-          HttpResponse.json(
-            {
-              data: {
-                createSession: { user: VALID_USER, errorAttributes: null, errorDetails: null },
-              },
-            },
-            { headers: SESSION_COOKIE_HEADERS },
-          ),
+        CreateSession: createSessionOk,
         GetWeek: () => new HttpResponse('Internal Server Error', { status: 500 }),
       }),
     );
@@ -384,15 +298,7 @@ describe('ForkableClient — transport errors', () => {
   test('throws ForkableSchemaError on non-JSON response', async () => {
     server.use(
       graphqlHandler({
-        CreateSession: () =>
-          HttpResponse.json(
-            {
-              data: {
-                createSession: { user: VALID_USER, errorAttributes: null, errorDetails: null },
-              },
-            },
-            { headers: SESSION_COOKIE_HEADERS },
-          ),
+        CreateSession: createSessionOk,
         GetWeek: () => new HttpResponse('not json', { status: 200 }),
       }),
     );
@@ -405,15 +311,7 @@ describe('ForkableClient — transport errors', () => {
   test('throws ForkableError on GraphQL-level errors in response', async () => {
     server.use(
       graphqlHandler({
-        CreateSession: () =>
-          HttpResponse.json(
-            {
-              data: {
-                createSession: { user: VALID_USER, errorAttributes: null, errorDetails: null },
-              },
-            },
-            { headers: SESSION_COOKIE_HEADERS },
-          ),
+        CreateSession: createSessionOk,
         GetWeek: () =>
           HttpResponse.json({ errors: [{ message: "Field 'foo' doesn't exist on type 'Query'" }] }),
       }),
