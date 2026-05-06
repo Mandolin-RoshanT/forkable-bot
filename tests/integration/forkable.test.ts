@@ -286,13 +286,10 @@ describe('ForkableClient — transport errors', () => {
 
     const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
-    try {
-      await client.getWeek('2026-05-04');
-      throw new Error('expected ForkableNetworkError');
-    } catch (err) {
-      expect(err).toBeInstanceOf(ForkableNetworkError);
-      expect((err as ForkableNetworkError).status).toBe(500);
-    }
+    await expect(client.getWeek('2026-05-04')).rejects.toMatchObject({
+      constructor: ForkableNetworkError,
+      status: 500,
+    });
   });
 
   test('throws ForkableSchemaError on non-JSON response', async () => {

@@ -6,9 +6,7 @@ import { join } from 'node:path';
 
 import { CsvRunLogWriter } from '../../src/clients/run-log-writer.ts';
 import type { RunLogRow } from '../../src/core/run-log.ts';
-import type { Logger } from '../../src/logger.ts';
-
-const silentLogger: Logger = { info: () => {}, error: () => {}, debug: () => {} };
+import { silentLogger } from '../fixtures/msw.ts';
 
 const sampleRow = (overrides: Partial<RunLogRow> = {}): RunLogRow => ({
   runAt: '2026-05-08T23:00:00.000Z',

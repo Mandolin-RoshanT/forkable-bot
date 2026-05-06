@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ResendMailer } from '../../src/clients/resend-mailer.ts';
-import type { Logger } from '../../src/logger.ts';
-
-const silentLogger: Logger = { info: () => {}, error: () => {}, debug: () => {} };
+import { silentLogger } from '../fixtures/msw.ts';
 
 const config = {
   apiKey: 're_test_key',

@@ -116,8 +116,7 @@ describe('toCsv', () => {
     const rows = buildRows(RUN_AT, 'pick', fullWeek);
     const csv = toCsv(rows);
     const [header, firstRow] = csv.split('\n');
-    expect(header?.startsWith('runAt,')).toBe(true);
-    expect(header?.endsWith(',summary')).toBe(true);
+    expect(header).toBe('runAt,mode,date,kind,fromVenue,fromMeal,toVenue,toMeal,bucket,summary');
     expect(firstRow?.startsWith(RUN_AT)).toBe(true);
   });
 

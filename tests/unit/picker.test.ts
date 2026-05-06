@@ -278,8 +278,9 @@ describe('pickWeek', () => {
     expect(swaps.calls).toHaveLength(1);
   });
 
-  test('failed scoring degrades to red; combined with non-red default = kept', async () => {
-    // We never set scoreByName for these names → defaults to yellow, see scoreFn above
+  test('yellow alternatives do not displace a green default', async () => {
+    // scoreByName has no entries for NeverSeen1/2 → scoreFn falls back to
+    // yellow (see scoreFn above). The default is forced green here.
     scoreByName.Default = 'green';
     const day = dayWithDefault(1, 100, 5, 'piece-uuid');
     const menus = [
