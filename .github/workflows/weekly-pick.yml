@@ -54,9 +54,22 @@ jobs:
       - name: Run picker
         run: bun src/index.ts ${{ inputs.mode || 'dry-run' }}
 
+      # Per-run artifact: captures runs/history.csv on every run including
+      # failures (always()). Default 90-day retention. Useful for grabbing
+      # the file from a single run page; long-term rolling history is in
+      # the committed runs/history.csv below.
+      - name: Upload run history (artifact)
+        if: always() && hashFiles('runs/history.csv') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-history-${{ github.run_id }}
+          path: runs/history.csv
+          retention-days: 90
+
       # Append-only history. Each Friday adds 5 rows (~500 bytes); over a
       # year this is ~26KB. The picker writes runs/history.csv directly;
-      # this step just commits + pushes whatever it produced.
+      # this step just commits + pushes whatever it produced. Skipped on
+      # failure so a half-state file never lands on main.
       - name: Commit run history
         if: success()
         run: |
