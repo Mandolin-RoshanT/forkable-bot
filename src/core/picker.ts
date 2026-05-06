@@ -2,11 +2,17 @@
 // alternatives, score, swap), decides what to do for each editable day.
 // No client knowledge here — easy to test with synthetic data.
 
-import type { Bucket, DayResult, MealCandidate, Score, SimpleMeal, WeekResult } from '../models.ts';
+import {
+  BUCKET_RANK,
+  type Bucket,
+  type DayResult,
+  type MealCandidate,
+  type Score,
+  type SimpleMeal,
+  type WeekResult,
+} from '../models.ts';
 import type { Delivery, Item, Menu } from '../schemas/forkable.ts';
 import { type TiebreakCandidate, breakTie } from './tiebreak.ts';
-
-const BUCKET_RANK: Record<Bucket, number> = { red: 0, yellow: 1, green: 2 };
 
 export type AlternativesFn = (
   deliveryId: number,

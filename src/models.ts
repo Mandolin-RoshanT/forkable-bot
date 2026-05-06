@@ -10,6 +10,11 @@ import { z } from 'zod';
 export const BucketSchema = z.enum(['green', 'yellow', 'red']);
 export type Bucket = z.infer<typeof BucketSchema>;
 
+// Higher = better. The picker uses this to find each day's top bucket;
+// CLI printing uses it (descending) to sort scored alternatives so green
+// comes first.
+export const BUCKET_RANK: Record<Bucket, number> = { red: 0, yellow: 1, green: 2 };
+
 export const ScoreSchema = z.object({
   bucket: BucketSchema,
   reasoning: z.string(),

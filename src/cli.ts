@@ -11,7 +11,7 @@ import { buildRows } from './core/run-log.ts';
 import { thisWeekMonday } from './lib/dates.ts';
 import { assertNever } from './lib/exhaustive.ts';
 import { createLogger, redactEmail } from './logger.ts';
-import type { Bucket, DayResult, Score, WeekResult } from './models.ts';
+import { BUCKET_RANK, type Bucket, type DayResult, type Score, type WeekResult } from './models.ts';
 import type { Delivery, Item } from './schemas/forkable.ts';
 
 const RUN_LOG_PATH = 'runs/history.csv';
@@ -26,7 +26,7 @@ export async function run(argv: string[]): Promise<number> {
     case 'pick':
       return runPicker(argv.slice(3), { dryRun: false });
     default:
-      console.error('usage: bun src/index.ts <show-week | dry-run> [YYYY-MM-DD]');
+      console.error('usage: bun src/index.ts <show-week | dry-run | pick> [YYYY-MM-DD]');
       return 1;
   }
 }
@@ -37,12 +37,12 @@ async function showWeek(args: string[]): Promise<number> {
   const noScore = args.includes('--no-score');
   const dateArg = args.find((a) => !a.startsWith('--'));
 
-  // Resend keys aren't used here. OpenAI is also unused if --no-score.
-  // Stub both so .env doesn't need to be fully populated for a read-only flow.
+  // Resend keys aren't used here. OpenAI is also unused if --no-score, in
+  // which case we stub the key so .env doesn't need to be fully populated
+  // for a read-only flow.
   const settings = loadSettings({
     ...process.env,
-    OPENAI_API_KEY:
-      process.env.OPENAI_API_KEY || (noScore ? 'unused-by-no-score' : process.env.OPENAI_API_KEY),
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || (noScore ? 'unused-by-no-score' : undefined),
     RESEND_API_KEY: process.env.RESEND_API_KEY || 'unused-by-show-week',
     NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
   });
@@ -285,7 +285,7 @@ async function printEditableDay(
 
   // Sort green → yellow → red, then by price asc within bucket.
   scored.sort((a, b) => {
-    const r = bucketRank(a.score.bucket) - bucketRank(b.score.bucket);
+    const r = BUCKET_RANK[b.score.bucket] - BUCKET_RANK[a.score.bucket];
     if (r !== 0) return r;
     return (a.item.price ?? 0) - (b.item.price ?? 0);
   });
@@ -321,17 +321,6 @@ function currentVenueName(day: Delivery): string | undefined {
     }
   }
   return undefined;
-}
-
-function bucketRank(b: Bucket): number {
-  switch (b) {
-    case 'green':
-      return 0;
-    case 'yellow':
-      return 1;
-    case 'red':
-      return 2;
-  }
 }
 
 function bucketLabel(b: Bucket): string {
