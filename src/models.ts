@@ -21,8 +21,8 @@ export const ScoreSchema = z.object({
 });
 export type Score = z.infer<typeof ScoreSchema>;
 
-// What we hand to the scorer. Slim view of a Forkable Item — the picker
-// extracts these fields from src/schemas/forkable.Item before scoring.
+// What we hand to the scorer. Slim view of a Forkable Item — toCandidate()
+// projects the Item's wire fields down to just what the LLM weighs.
 export type MealCandidate = {
   name: string;
   description: string | null;
@@ -30,6 +30,18 @@ export type MealCandidate = {
   ingredientTags: string[];
   dietLevel: number | null;
 };
+
+import type { Item } from './schemas/forkable.ts';
+
+export function toCandidate(item: Item): MealCandidate {
+  return {
+    name: item.name,
+    description: item.description,
+    price: item.price,
+    ingredientTags: item.ingredientTags,
+    dietLevel: item.dietLevel,
+  };
+}
 
 // ─── Picker results ───────────────────────────────────────────────────────
 

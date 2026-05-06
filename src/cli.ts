@@ -6,12 +6,20 @@ import { type OpenAIScorer, createOpenAIScorer } from './clients/openai-scorer.t
 import { ResendMailer } from './clients/resend-mailer.ts';
 import { CsvRunLogWriter } from './clients/run-log-writer.ts';
 import { loadSettings } from './config.ts';
-import { pickWeek, toCandidate } from './core/picker.ts';
+import { pickWeek } from './core/picker.ts';
 import { buildRows } from './core/run-log.ts';
 import { thisWeekMonday } from './lib/dates.ts';
+import { firstPieceWithVenue } from './lib/delivery.ts';
 import { assertNever } from './lib/exhaustive.ts';
 import { createLogger, redactEmail } from './logger.ts';
-import { BUCKET_RANK, type Bucket, type DayResult, type Score, type WeekResult } from './models.ts';
+import {
+  BUCKET_RANK,
+  type Bucket,
+  type DayResult,
+  type Score,
+  type WeekResult,
+  toCandidate,
+} from './models.ts';
 import type { Delivery, Item } from './schemas/forkable.ts';
 
 // Each run writes a fresh per-week CSV at runs/<from>.csv. Re-running a
@@ -245,10 +253,10 @@ async function printEditableDay(
 ): Promise<void> {
   console.log(`${dayLabel(day)}  EDITABLE`);
 
-  const current = currentPiece(day);
-  if (current) {
-    const venue = currentVenueName(day) ?? '(unknown venue)';
-    console.log(`  current: ${venue} — ${current.name} (${formatPrice(current.price)})`);
+  const fpv = firstPieceWithVenue(day);
+  if (fpv) {
+    const venue = fpv.venueName ?? '(unknown venue)';
+    console.log(`  current: ${venue} — ${fpv.piece.name} (${formatPrice(fpv.piece.price)})`);
   } else {
     console.log('  current: (none)');
   }
@@ -309,23 +317,6 @@ function dayLabel(day: Delivery): string {
   const d = new Date(day.forDeliveryAt);
   const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()];
   return `${dow} ${day.forDeliveryAt.slice(0, 10)}`;
-}
-
-function currentPiece(day: Delivery): Delivery['orders'][number]['pieces'][number] | undefined {
-  for (const order of day.orders) {
-    const piece = order.pieces[0];
-    if (piece) return piece;
-  }
-  return undefined;
-}
-
-function currentVenueName(day: Delivery): string | undefined {
-  for (const order of day.orders) {
-    if (order.pieces.length > 0) {
-      return order.menu?.name;
-    }
-  }
-  return undefined;
 }
 
 function bucketLabel(b: Bucket): string {
