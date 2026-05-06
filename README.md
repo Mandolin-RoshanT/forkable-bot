@@ -74,7 +74,7 @@ cp .env.example .env
 # RESEND_API_KEY only needed if you want to test the failure-email path locally
 
 bun install
-bun run check          # typecheck + lint + tests (76 tests)
+bun run check          # typecheck + lint + tests (90 tests)
 ```
 
 ### Commands
@@ -118,7 +118,7 @@ src/
 └── index.ts                  thin entry point with top-level catch
 ```
 
-Tests live in `tests/{unit,integration,fixtures}/` (76 tests; `bun test`).
+Tests live in `tests/{unit,integration,fixtures}/` (90 tests; `bun test`).
 
 ## Schema-drift recovery
 

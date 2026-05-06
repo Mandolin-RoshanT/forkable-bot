@@ -305,6 +305,22 @@ describe('ForkableClient — transport errors', () => {
     await expect(client.getWeek('2026-05-04')).rejects.toBeInstanceOf(ForkableSchemaError);
   });
 
+  test('getAlternatives() throws ForkableNetworkError on 500', async () => {
+    server.use(
+      graphqlHandler({
+        CreateSession: createSessionOk,
+        GetAlternatives: () => new HttpResponse('Internal Server Error', { status: 500 }),
+      }),
+    );
+
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
+    await client.login();
+    await expect(client.getAlternatives([1, 2, 3], 6059)).rejects.toMatchObject({
+      constructor: ForkableNetworkError,
+      status: 500,
+    });
+  });
+
   test('throws ForkableError on GraphQL-level errors in response', async () => {
     server.use(
       graphqlHandler({

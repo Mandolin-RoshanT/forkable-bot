@@ -302,4 +302,36 @@ describe('pickWeek', () => {
     expect(result.days[0]?.kind).toBe('kept-default');
     expect(swaps.calls).toHaveLength(0);
   });
+
+  test('an order with no piece yields kind=no-default and the picked alternative', async () => {
+    scoreByName.OnlyOption = 'green';
+    const day = makeDelivery({
+      id: 99,
+      availableMenuIds: [200],
+      orders: [
+        // Order exists (Forkable creates one per available venue) but the
+        // user has no chosen meal yet — empty pieces[].
+        { id: 990, state: 'initial', menu: { id: 200, name: 'only-menu' }, pieces: [] },
+      ],
+    });
+    const menus = [makeMenu(200, 'OnlyVenue', [{ id: 8, name: 'OnlyOption' }])];
+    const swaps = swapsFor();
+
+    const result = await pickWeek({
+      from: '2026-05-04',
+      days: [day],
+      alternativesFor: makeAlternativesFn(menus),
+      score: scoreFn,
+      swap: swaps.fn,
+      dryRun: false,
+    });
+
+    const dayResult = result.days[0];
+    expect(dayResult?.kind).toBe('no-default');
+    if (dayResult?.kind === 'no-default') {
+      expect(dayResult.picked?.name).toBe('OnlyOption');
+    }
+    // No oldPieceId → cannot issue a real swap even outside dry-run.
+    expect(swaps.calls).toHaveLength(0);
+  });
 });
