@@ -25,3 +25,31 @@ export type MealCandidate = {
   ingredientTags: string[];
   dietLevel: number | null;
 };
+
+// ─── Picker results ───────────────────────────────────────────────────────
+
+export type SimpleMeal = {
+  venue: string;
+  name: string;
+  price: number | null;
+};
+
+// One day's outcome. Discriminated union — easy to print and easy to test.
+export type DayResult =
+  | {
+      kind: 'swapped';
+      date: string;
+      from: SimpleMeal;
+      to: SimpleMeal;
+      bucket: Bucket;
+      reasoning: string;
+    }
+  | { kind: 'kept-default'; date: string; current: SimpleMeal; bucket: Bucket; reason: string }
+  | { kind: 'no-default'; date: string; picked?: SimpleMeal; reason: string }
+  | { kind: 'skipped-locked'; date: string }
+  | { kind: 'failed'; date: string; reason: string };
+
+export type WeekResult = {
+  from: string;
+  days: DayResult[];
+};
