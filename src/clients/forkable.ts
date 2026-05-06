@@ -192,7 +192,18 @@ export class ForkableClient {
     );
   }
 
-  private async post(body: GraphQLBody, opLabel: string): Promise<unknown> {
+  // Public escape hatch for the spike scripts (capture-ops, probe, introspect)
+  // and any future ad-hoc tooling. Returns the full GraphQL response, errors
+  // and all — perfect for replay / probing where you want to inspect what the
+  // server said. Network errors (non-2xx) and malformed JSON still throw.
+  async rawQuery(body: GraphQLBody, opLabel = 'rawQuery'): Promise<GraphQLResponse> {
+    this.requireLogin(opLabel);
+    return this.postRaw(body, opLabel);
+  }
+
+  // Network primitive — returns the parsed response, throwing on non-2xx
+  // and malformed JSON but NOT on `response.errors`.
+  private async postRaw(body: GraphQLBody, opLabel: string): Promise<GraphQLResponse> {
     const headers: Record<string, string> = { ...BROWSER_HEADERS };
     const cookie = this.jar.serialize();
     if (cookie) {
@@ -219,17 +230,20 @@ export class ForkableClient {
       );
     }
 
-    let parsed: GraphQLResponse;
     try {
-      parsed = JSON.parse(text) as GraphQLResponse;
+      return JSON.parse(text) as GraphQLResponse;
     } catch (err) {
       throw new ForkableSchemaError(`${opLabel}: response was not valid JSON`, err);
     }
+  }
 
-    if (parsed.errors && parsed.errors.length > 0) {
-      throw new ForkableError(`${opLabel}: GraphQL errors: ${JSON.stringify(parsed.errors)}`);
+  // Adds the throw-on-response.errors check on top of postRaw — what the
+  // typed methods (login, me, getWeek, getAlternatives) want.
+  private async post(body: GraphQLBody, opLabel: string): Promise<unknown> {
+    const res = await this.postRaw(body, opLabel);
+    if (res.errors && res.errors.length > 0) {
+      throw new ForkableError(`${opLabel}: GraphQL errors: ${JSON.stringify(res.errors)}`);
     }
-
-    return parsed.data;
+    return res.data;
   }
 }

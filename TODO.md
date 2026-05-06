@@ -4,15 +4,11 @@ Living list. Items here are deliberately deferred, not bugs.
 
 ## Deferred cleanups
 
-- **Migrate `scripts/lib/auth.ts` to `ForkableClient`.** The spike's
-  `warmup`/`login`/`verifyMe` were copied into `src/clients/forkable.ts`
-  during M2 step 3. The spike scripts (capture-ops, probe, introspect)
-  still use the old `scripts/lib/auth.ts`. To unify, expose a generic
-  `client.query<T>(body)` escape hatch on `ForkableClient` and have the
-  spike scripts use it. Then delete `scripts/lib/{auth,cookies,graphql,types}.ts`.
 - **Logger prefix split.** `scripts/lib/logging.ts` uses `[capture-ops]`,
   `src/logger.ts` uses `[forkable-bot]`. Intentional today (different
-  contexts) but if we unify spike + production code paths, decide on one.
+  contexts). The spike's `captureOpsLogger` adapter satisfies the
+  `Logger` interface so spike scripts still work with `ForkableClient`.
+  Reconsider only if we collapse the contexts.
 - **`SPIKE_FINDINGS.md` lifecycle.** Mostly historical now that M2 is
   underway. Keep through M4 for traceability, then move to `docs/` or
   archive.

@@ -1,12 +1,9 @@
 // Probe: log in and send speculative GraphQL queries; the server's error
 // messages (often "Did you mean: ...") map the schema when introspection is off.
 
-import { login } from './lib/auth.ts';
-import { FORKABLE_GRAPHQL } from './lib/constants.ts';
-import { graphql } from './lib/graphql.ts';
-import { log, logError, redactEmail } from './lib/logging.ts';
+import { ForkableClient } from '../src/clients/forkable.ts';
+import { captureOpsLogger, log, logError, redactEmail } from './lib/logging.ts';
 import { PROBES } from './lib/probes.ts';
-import type { CookieJar } from './lib/types.ts';
 
 async function main(): Promise<void> {
   const email = process.env.FORKABLE_EMAIL;
@@ -17,15 +14,15 @@ async function main(): Promise<void> {
   }
   log(`account: ${redactEmail(email)}`);
 
-  const jar: CookieJar = new Map();
-  await login(email, password, jar);
+  const client = new ForkableClient({ email, password }, captureOpsLogger);
+  await client.login();
   log('logged in, starting probes…');
 
   for (const probe of PROBES) {
     log(`\n--- ${probe.label} ---`);
     log(`query: ${probe.query}`);
     try {
-      const res = await graphql(FORKABLE_GRAPHQL, { query: probe.query }, jar);
+      const res = await client.rawQuery({ query: probe.query }, probe.label);
       if (res.errors && res.errors.length > 0) {
         for (const e of res.errors) {
           log(`  ✗ ${e.message}`);

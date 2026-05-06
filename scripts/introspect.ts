@@ -6,12 +6,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { login } from './lib/auth.ts';
-import { CAPTURES_DIR, FORKABLE_GRAPHQL } from './lib/constants.ts';
-import { graphql } from './lib/graphql.ts';
-import { log, logError, redactEmail } from './lib/logging.ts';
+import { ForkableClient } from '../src/clients/forkable.ts';
+import { CAPTURES_DIR } from './lib/constants.ts';
+import { captureOpsLogger, log, logError, redactEmail } from './lib/logging.ts';
 import { INTROSPECTION_QUERY } from './lib/queries.ts';
-import type { CookieJar } from './lib/types.ts';
 
 async function main(): Promise<void> {
   const email = process.env.FORKABLE_EMAIL;
@@ -22,11 +20,11 @@ async function main(): Promise<void> {
   }
   log(`account: ${redactEmail(email)}`);
 
-  const jar: CookieJar = new Map();
-  await login(email, password, jar);
+  const client = new ForkableClient({ email, password }, captureOpsLogger);
+  await client.login();
 
   log('running introspection query…');
-  const res = await graphql(FORKABLE_GRAPHQL, { query: INTROSPECTION_QUERY }, jar);
+  const res = await client.rawQuery({ query: INTROSPECTION_QUERY }, 'IntrospectionQuery');
 
   if (res.errors && res.errors.length > 0) {
     logError(`introspection BLOCKED: ${JSON.stringify(res.errors)}`);

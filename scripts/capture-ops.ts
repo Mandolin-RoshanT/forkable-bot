@@ -9,11 +9,17 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
-import { login, verifyMe } from './lib/auth.ts';
-import { CAPTURES_DIR, FORKABLE_GRAPHQL, RAW_DIR } from './lib/constants.ts';
-import { graphql } from './lib/graphql.ts';
-import { log, logError, redactEmail } from './lib/logging.ts';
-import type { CapturedOp, CookieJar, GraphQLBody } from './lib/types.ts';
+import { ForkableClient } from '../src/clients/forkable.ts';
+import { CAPTURES_DIR, RAW_DIR } from './lib/constants.ts';
+import { captureOpsLogger, log, logError, redactEmail } from './lib/logging.ts';
+
+type GraphQLBody = {
+  operationName?: string;
+  query: string;
+  variables?: Record<string, unknown>;
+};
+
+type CapturedOp = { file: string; body: GraphQLBody };
 
 // ─── Capture replay ─────────────────────────────────────────────────────────
 
@@ -47,7 +53,7 @@ async function loadCapturedOp(file: string): Promise<GraphQLBody | null> {
   return body;
 }
 
-async function replayCaptures(jar: CookieJar, allowMutations: boolean): Promise<void> {
+async function replayCaptures(client: ForkableClient, allowMutations: boolean): Promise<void> {
   if (!existsSync(RAW_DIR)) {
     log('no scripts/captures/raw/ directory — skipping replay phase');
     return;
@@ -80,7 +86,7 @@ async function replayCaptures(jar: CookieJar, allowMutations: boolean): Promise<
   // Run sequentially to avoid hammering the API.
   log(`replaying ${queries.length} query operation(s) from scripts/captures/raw/`);
   for (const op of queries) {
-    await replayOne(op.file, op.body, jar);
+    await replayOne(client, op.file, op.body);
   }
 
   if (mutations.length === 0) {
@@ -90,7 +96,7 @@ async function replayCaptures(jar: CookieJar, allowMutations: boolean): Promise<
   if (allowMutations) {
     log(`replaying ${mutations.length} mutation(s) — DESTRUCTIVE, --mutate flag set`);
     for (const op of mutations) {
-      await replayOne(op.file, op.body, jar);
+      await replayOne(client, op.file, op.body);
     }
   } else {
     const skippedNames = mutations.map((op) => basename(op.file, '.json')).join(', ');
@@ -98,10 +104,10 @@ async function replayCaptures(jar: CookieJar, allowMutations: boolean): Promise<
   }
 }
 
-async function replayOne(file: string, body: GraphQLBody, jar: CookieJar): Promise<void> {
+async function replayOne(client: ForkableClient, file: string, body: GraphQLBody): Promise<void> {
   const opName = basename(file, '.json');
   try {
-    const res = await graphql(FORKABLE_GRAPHQL, body, jar);
+    const res = await client.rawQuery(body, opName);
     const outPath = join(CAPTURES_DIR, file);
     const json = JSON.stringify(res, null, 2);
     writeFileSync(outPath, json);
@@ -136,13 +142,12 @@ async function main(): Promise<void> {
   log('loading credentials from .env');
   log(`account: ${redactEmail(email)}`);
 
-  const jar: CookieJar = new Map();
-
-  await login(email, password, jar);
-  await verifyMe(jar);
+  const client = new ForkableClient({ email, password }, captureOpsLogger);
+  await client.login();
+  await client.me();
   log('login flow verified ✓');
 
-  await replayCaptures(jar, allowMutations);
+  await replayCaptures(client, allowMutations);
   log('done');
 }
 
