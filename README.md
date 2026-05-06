@@ -1,6 +1,11 @@
 # forkable-helper
 
+<<<<<<< feat/m1-spike
 Weekly meal auto-picker for [forkable.com](https://forkable.com/mc/). Logs in, scores each editable day's alternatives against a fat-loss rubric using `gpt-4o-mini`, and swaps to the highest-scoring meal. Runs on a Friday GitHub Actions cron. Failure-only emails via Resend.
+=======
+Weekly meal auto-picker for [forkable.com](https://forkable.com/mc/). Scores each day's alternatives against a fat-loss rubric using `gpt-4o-mini` and swaps in the highest-scoring meal. Runs on GitHub Actions cron every Friday afternoon. Failure-only email notifications via Resend.
+
+>>>>>>> main
 
 ## Status
 
@@ -20,6 +25,7 @@ bun install
 bun run check          # typecheck + lint + tests
 ```
 
+<<<<<<< feat/m1-spike
 ## Commands
 
 ```sh
@@ -119,3 +125,5 @@ The spike scripts (`scripts/{capture-ops,probe,introspect,verify-queries}.ts`) a
 - `TODO.md` — known cleanups + improvements deferred for after M4
 - `scripts/SPIKE_FINDINGS.md` — historical record of M1 schema discovery
 - `scripts/CAPTURE.md` — DevTools capture protocol
+=======
+>>>>>>> main
