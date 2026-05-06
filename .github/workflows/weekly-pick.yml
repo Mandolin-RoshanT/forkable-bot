@@ -19,7 +19,8 @@ concurrency:
   group: forkable-bot
   cancel-in-progress: false
 
-# The post-run step pushes runs/history.csv back to the repo.
+# The post-run step pushes the freshly-written runs/<from>.csv back to
+# the repo.
 permissions:
   contents: write
 
@@ -56,30 +57,36 @@ jobs:
       - name: Run picker
         run: bun src/index.ts ${{ inputs.mode || 'dry-run' }}
 
-      # Per-run artifact: captures runs/history.csv on every run including
-      # failures (always()). Default 90-day retention. Useful for grabbing
-      # the file from a single run page; long-term rolling history is in
-      # the committed runs/history.csv below.
-      - name: Upload run history (artifact)
-        if: always() && hashFiles('runs/history.csv') != ''
+      # The picker writes runs/<from>.csv where <from> is the Monday of
+      # the targeted delivery week. Find that file (the newest .csv in
+      # runs/) and upload only it — past weeks' files stay in the repo,
+      # not in this run's artifact zip.
+      - name: Identify this run's CSV
+        if: always()
+        id: run_csv
+        run: |
+          LATEST=$(ls -t runs/*.csv 2>/dev/null | head -n1)
+          echo "path=${LATEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload this run's CSV (artifact)
+        if: always() && steps.run_csv.outputs.path != ''
         uses: actions/upload-artifact@v4
         with:
           name: run-history-${{ github.run_id }}
-          path: runs/history.csv
+          path: ${{ steps.run_csv.outputs.path }}
           retention-days: 90
 
-      # Append-only history. Each Friday adds 5 rows (~500 bytes); over a
-      # year this is ~26KB. The picker writes runs/history.csv directly;
-      # this step just commits + pushes whatever it produced. Skipped on
+      # Commit only this run's per-week CSV back to the repo. Past weeks'
+      # files (committed by previous runs) are left as-is. Skipped on
       # failure so a half-state file never lands on main.
-      - name: Commit run history
+      - name: Commit this run's CSV
         if: success()
         run: |
           git config user.name 'forkable-bot'
           git config user.email '${{ github.actor }}@users.noreply.github.com'
           git add runs/
           if git diff --staged --quiet; then
-            echo "no run-history changes to commit"
+            echo "no run-csv changes to commit"
           else
             git commit -m "chore(runs): log picks for $(date -u +%Y-%m-%d)"
             git push
