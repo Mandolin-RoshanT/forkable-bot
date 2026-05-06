@@ -140,12 +140,10 @@ The spike scripts (`scripts/{capture-ops,probe,introspect,verify-queries}.ts`) a
 | `MFA is enabled — bot cannot proceed` | MFA was enabled on the Forkable account | Disable MFA, or wait for the bot to support TOTP |
 | `createSession set no new cookies — auth flow broken` | The auth path changed at the edge | Re-capture the `createSession` mutation per `scripts/CAPTURE.md` |
 | `HTTP 401 Unauthorized` | AWS ALB sticky-cookie warmup broke | Forkable changed their LB config; usually transient |
-| `introspection BLOCKED` | Expected — Forkable disables introspection in production | No action needed; the bot doesn't rely on it |
 | `Invalid configuration: …` | A required env var is missing | The error names the field; check the secrets in your fork |
 
 ## Living docs
 
 - `TODO.md` — known cleanups + improvements deferred for after M4
-- `scripts/SPIKE_FINDINGS.md` — historical record of M1 schema discovery
 - `scripts/CAPTURE.md` — DevTools capture protocol
 - [Issue #3](https://github.com/Mandolin-RoshanT/forkable-bot/issues/3) — multi-user / hosted-service direction

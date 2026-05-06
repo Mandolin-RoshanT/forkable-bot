@@ -1,6 +1,8 @@
-# DevTools capture protocol (M1 spike)
+# DevTools capture protocol
 
 The `bun run spike` script (`scripts/capture-ops.ts`) verifies our `createSession` login works end-to-end, then **replays** any GraphQL operations it finds in `scripts/captures/raw/*.json`, dumping each response to `scripts/captures/<op_name>.json`.
+
+Use this whenever Forkable changes a GraphQL response shape and the bot's Zod schemas start failing — re-capture, re-run the spike, then update `src/queries/` and `src/schemas/` until tests pass again.
 
 This file documents how to grab those raw payloads from the live Forkable SPA.
 
@@ -49,9 +51,9 @@ For each operation:
    scripts/captures/raw/swap-meal.json
    ```
 
-5. Also note (in `SPIKE_FINDINGS.md`):
-   - Any non-standard request **headers** (CSRF, `X-Apollo-Operation-Id`, etc.). Switch to the **Headers** sub-tab → "Request Headers".
-   - The day object's **status** field name (`ORDERED` vs editable) and the **cutoff** field name. You can grab these from the response of `getWeek`.
+5. Also note:
+   - Any non-standard request **headers** (CSRF, `X-Apollo-Operation-Id`, etc.). Switch to the **Headers** sub-tab → "Request Headers". Add to `BROWSER_HEADERS` in `src/lib/constants.ts` if needed.
+   - The day object's **status** field name (`ORDERED` vs editable) and the **cutoff** field name. Update `src/schemas/forkable.ts` accordingly.
 
 ---
 
@@ -86,5 +88,3 @@ Expected output (minimal, with redacted secrets):
 [capture-ops] skipped 1 mutation (use --mutate to replay): swap-meal
 [capture-ops] done
 ```
-
-Then fill out `SPIKE_FINDINGS.md` with what you observed.
