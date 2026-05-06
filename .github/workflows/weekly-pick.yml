@@ -1,0 +1,51 @@
+name: Weekly meal picker
+
+on:
+  # Friday 4pm PDT (= 23:00 UTC). One hour off during standard time but the
+  # cutoff window is wide enough that it doesn't matter.
+  schedule:
+    - cron: '0 23 * * 5'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'dry-run (preview) or pick (live swap)'
+        type: choice
+        options: [dry-run, pick]
+        default: dry-run
+
+# Block overlapping runs (a manual dispatch during the cron, etc.) but don't
+# cancel the in-flight one — a half-applied swap is worse than waiting.
+concurrency:
+  group: forkable-bot
+  cancel-in-progress: false
+
+jobs:
+  pick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      FORKABLE_EMAIL: ${{ secrets.FORKABLE_EMAIL }}
+      FORKABLE_PASSWORD: ${{ secrets.FORKABLE_PASSWORD }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      NOTIFY_TO_EMAIL: ${{ secrets.NOTIFY_TO_EMAIL }}
+      NOTIFY_FROM_EMAIL: ${{ secrets.NOTIFY_FROM_EMAIL }}
+    steps:
+      # Defensive masking so the password can't leak into logs even if a
+      # later step echoes process.env.
+      - name: Mask password
+        run: echo "::add-mask::${{ secrets.FORKABLE_PASSWORD }}"
+
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3'
+
+      - run: bun install --frozen-lockfile
+
+      # Cron has no `inputs.mode` so we default to dry-run during the M3
+      # validation window. M4 flips this default to `pick` once we've
+      # watched a full week of dry-runs match Roshan's manual picks.
+      - name: Run picker
+        run: bun src/index.ts ${{ inputs.mode || 'dry-run' }}
