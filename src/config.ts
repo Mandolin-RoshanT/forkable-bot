@@ -12,7 +12,9 @@ export const SettingsSchema = z.object({
   resend: z.object({
     apiKey: z.string().min(1),
     notifyTo: z.string().email(),
-    notifyFrom: z.string().email(),
+    // Defaults to Resend's universally-verified sender. Override via
+    // NOTIFY_FROM_EMAIL when you have a verified custom domain.
+    notifyFrom: z.string().email().default('onboarding@resend.dev'),
   }),
   debug: z.boolean(),
 });
@@ -29,7 +31,9 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     resend: {
       apiKey: env.RESEND_API_KEY,
       notifyTo: env.NOTIFY_TO_EMAIL,
-      notifyFrom: env.NOTIFY_FROM_EMAIL,
+      // Empty-string → undefined so the schema default kicks in (Bun
+      // loads `.env` literally, so `NOTIFY_FROM_EMAIL=` is a real "").
+      notifyFrom: env.NOTIFY_FROM_EMAIL || undefined,
     },
     debug: env.DEBUG === '1',
   });

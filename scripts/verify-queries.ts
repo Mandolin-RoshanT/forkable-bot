@@ -18,7 +18,6 @@ async function main(): Promise<void> {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'unused-in-verify',
     RESEND_API_KEY: process.env.RESEND_API_KEY || 'unused-in-verify',
     NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
-    NOTIFY_FROM_EMAIL: process.env.NOTIFY_FROM_EMAIL || 'noreply@example.com',
   });
   const logger = createLogger(settings);
   logger.info(`account: ${redactEmail(settings.forkable.email)}`);

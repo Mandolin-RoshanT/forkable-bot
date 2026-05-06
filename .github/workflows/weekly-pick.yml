@@ -33,7 +33,9 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       NOTIFY_TO_EMAIL: ${{ secrets.NOTIFY_TO_EMAIL }}
-      NOTIFY_FROM_EMAIL: ${{ secrets.NOTIFY_FROM_EMAIL }}
+      # NOTIFY_FROM_EMAIL omitted — defaults to onboarding@resend.dev in
+      # src/config.ts. Set the secret + restore this line if you switch
+      # to a verified custom domain in Resend.
     steps:
       # Defensive masking so the password can't leak into logs even if a
       # later step echoes process.env.

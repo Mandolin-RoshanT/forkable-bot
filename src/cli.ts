@@ -45,7 +45,6 @@ async function showWeek(args: string[]): Promise<number> {
       process.env.OPENAI_API_KEY || (noScore ? 'unused-by-no-score' : process.env.OPENAI_API_KEY),
     RESEND_API_KEY: process.env.RESEND_API_KEY || 'unused-by-show-week',
     NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
-    NOTIFY_FROM_EMAIL: process.env.NOTIFY_FROM_EMAIL || 'noreply@example.com',
   });
   const logger = createLogger(settings);
   logger.info(`account: ${redactEmail(settings.forkable.email)}`);
@@ -86,7 +85,6 @@ async function runPicker(args: string[], opts: { dryRun: boolean }): Promise<num
     ...process.env,
     RESEND_API_KEY: process.env.RESEND_API_KEY || 'unconfigured',
     NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
-    NOTIFY_FROM_EMAIL: process.env.NOTIFY_FROM_EMAIL || 'noreply@example.com',
   });
   const logger = createLogger(settings);
   logger.info(`account: ${redactEmail(settings.forkable.email)}`);

@@ -35,4 +35,15 @@ describe('loadSettings', () => {
       /forkable\.email/,
     );
   });
+
+  test("NOTIFY_FROM_EMAIL is optional — defaults to Resend's sender", () => {
+    const { NOTIFY_FROM_EMAIL: _, ...withoutFrom } = VALID_ENV;
+    expect(loadSettings(withoutFrom).resend.notifyFrom).toBe('onboarding@resend.dev');
+  });
+
+  test("NOTIFY_FROM_EMAIL='' (empty string) also falls back to the default", () => {
+    expect(loadSettings({ ...VALID_ENV, NOTIFY_FROM_EMAIL: '' }).resend.notifyFrom).toBe(
+      'onboarding@resend.dev',
+    );
+  });
 });

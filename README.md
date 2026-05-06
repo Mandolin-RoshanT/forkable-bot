@@ -80,7 +80,7 @@ Tests live in `tests/{unit,integration,fixtures}/` (~60 tests; see `bun test`).
 | `OPENAI_API_KEY` | Used for `gpt-4o-mini` scoring |
 | `RESEND_API_KEY` | Failure email sender |
 | `NOTIFY_TO_EMAIL` | Where failure emails go |
-| `NOTIFY_FROM_EMAIL` | A verified Resend sender, e.g. `onboarding@resend.dev` |
+| `NOTIFY_FROM_EMAIL` | **Optional.** Defaults to `onboarding@resend.dev` (Resend's universally-verified sender). Only set this if you have a custom verified domain. |
 
 **Workflow** lives at `.github/workflows/weekly-pick.yml`:
 
