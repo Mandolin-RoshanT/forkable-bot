@@ -2,6 +2,8 @@
 // We use raw fetch instead of the official SDK to keep deps minimal and the
 // surface easy to mock in tests.
 
+import type { Settings } from '../config.ts';
+import { assertNever } from '../lib/exhaustive.ts';
 import type { Logger } from '../logger.ts';
 import type { WeekResult } from '../models.ts';
 
@@ -14,6 +16,25 @@ export type ResendConfig = {
 };
 
 export class ResendMailer {
+  // Returns null when RESEND_API_KEY isn't actually set in the environment.
+  // The settings-loader stubs that variable so the picker can run without
+  // Resend during local development; this factory is the single place
+  // that decides "is the mailer real?" so the question doesn't leak into
+  // every caller.
+  static fromEnv(env: NodeJS.ProcessEnv, settings: Settings, logger: Logger): ResendMailer | null {
+    if (!env.RESEND_API_KEY) {
+      return null;
+    }
+    return new ResendMailer(
+      {
+        apiKey: settings.resend.apiKey,
+        from: settings.resend.notifyFrom,
+        to: settings.resend.notifyTo,
+      },
+      logger,
+    );
+  }
+
   constructor(
     private readonly config: ResendConfig,
     private readonly logger: Logger,
@@ -76,5 +97,7 @@ function formatDayLine(day: WeekResult['days'][number]): string {
       return `  ${day.date}  NO-DEF  picked: ${day.picked?.name ?? '(none)'}`;
     case 'failed':
       return `  ${day.date}  FAILED  ${day.reason}`;
+    default:
+      return assertNever(day);
   }
 }

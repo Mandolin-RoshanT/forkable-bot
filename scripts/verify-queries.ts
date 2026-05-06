@@ -7,16 +7,8 @@
 
 import { ForkableClient } from '../src/clients/forkable.ts';
 import { loadSettings } from '../src/config.ts';
+import { thisWeekMonday } from '../src/lib/dates.ts';
 import { createLogger, redactEmail } from '../src/logger.ts';
-
-function thisWeekMonday(): string {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const daysFromMonday = (dayOfWeek + 6) % 7;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - daysFromMonday);
-  return monday.toISOString().slice(0, 10);
-}
 
 async function main(): Promise<void> {
   // OpenAI/Resend keys aren't used by this script; stub them so we don't

@@ -5,9 +5,11 @@ import { ForkableClient } from './clients/forkable.ts';
 import { type OpenAIScorer, createOpenAIScorer } from './clients/openai-scorer.ts';
 import { ResendMailer } from './clients/resend-mailer.ts';
 import { loadSettings } from './config.ts';
-import { pickWeek } from './core/picker.ts';
+import { pickWeek, toCandidate } from './core/picker.ts';
+import { thisWeekMonday } from './lib/dates.ts';
+import { assertNever } from './lib/exhaustive.ts';
 import { createLogger, redactEmail } from './logger.ts';
-import type { Bucket, DayResult, MealCandidate, Score, WeekResult } from './models.ts';
+import type { Bucket, DayResult, Score, WeekResult } from './models.ts';
 import type { Delivery, Item } from './schemas/forkable.ts';
 
 export async function run(argv: string[]): Promise<number> {
@@ -85,17 +87,7 @@ async function runPicker(args: string[], opts: { dryRun: boolean }): Promise<num
   logger.info(`account: ${redactEmail(settings.forkable.email)}`);
   logger.info(opts.dryRun ? 'mode: DRY-RUN (no swaps will be issued)' : 'mode: LIVE');
 
-  // Only construct a real mailer when RESEND_API_KEY was actually set.
-  const mailer = process.env.RESEND_API_KEY
-    ? new ResendMailer(
-        {
-          apiKey: settings.resend.apiKey,
-          from: settings.resend.notifyFrom,
-          to: settings.resend.notifyTo,
-        },
-        logger,
-      )
-    : null;
+  const mailer = ResendMailer.fromEnv(process.env, settings, logger);
 
   try {
     const client = new ForkableClient(settings.forkable, logger);
@@ -187,17 +179,33 @@ function printDayResult(day: DayResult): void {
     case 'failed':
       console.log(`${day.date}  FAILED — ${day.reason}`);
       break;
+    default:
+      assertNever(day);
   }
 }
 
 function printSummary(result: WeekResult): void {
   const counts = { swapped: 0, kept: 0, locked: 0, failed: 0, noDefault: 0 };
   for (const day of result.days) {
-    if (day.kind === 'swapped') counts.swapped++;
-    else if (day.kind === 'kept-default') counts.kept++;
-    else if (day.kind === 'skipped-locked') counts.locked++;
-    else if (day.kind === 'failed') counts.failed++;
-    else if (day.kind === 'no-default') counts.noDefault++;
+    switch (day.kind) {
+      case 'swapped':
+        counts.swapped++;
+        break;
+      case 'kept-default':
+        counts.kept++;
+        break;
+      case 'skipped-locked':
+        counts.locked++;
+        break;
+      case 'failed':
+        counts.failed++;
+        break;
+      case 'no-default':
+        counts.noDefault++;
+        break;
+      default:
+        assertNever(day);
+    }
   }
   console.log(
     `summary: ${counts.swapped} swap(s), ${counts.kept} kept, ${counts.locked} locked, ${counts.noDefault} no-default, ${counts.failed} failed`,
@@ -283,15 +291,6 @@ async function printEditableDay(
 
 // ─── small pure helpers ────────────────────────────────────────────────────
 
-function thisWeekMonday(): string {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const daysFromMonday = (dayOfWeek + 6) % 7;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - daysFromMonday);
-  return monday.toISOString().slice(0, 10);
-}
-
 function dayLabel(day: Delivery): string {
   const d = new Date(day.forDeliveryAt);
   const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()];
@@ -313,16 +312,6 @@ function currentVenueName(day: Delivery): string | undefined {
     }
   }
   return undefined;
-}
-
-function toCandidate(item: Item): MealCandidate {
-  return {
-    name: item.name,
-    description: item.description,
-    price: item.price,
-    ingredientTags: item.ingredientTags,
-    dietLevel: item.dietLevel,
-  };
 }
 
 function bucketRank(b: Bucket): number {

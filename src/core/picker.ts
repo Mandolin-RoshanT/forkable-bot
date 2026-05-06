@@ -197,7 +197,7 @@ function currentPieceRef(
   return undefined;
 }
 
-function toCandidate(item: Item): MealCandidate {
+export function toCandidate(item: Item): MealCandidate {
   return {
     name: item.name,
     description: item.description,
