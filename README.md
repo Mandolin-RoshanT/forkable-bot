@@ -111,7 +111,7 @@ src/
 ├── commands/                 one file per CLI subcommand
 │   ├── show-week.ts          show-week — read-only week dump (with optional scoring)
 │   └── run-picker.ts         pick / dry-run — score, swap, write CSV, failure-email on throw
-├── lib/                      small utilities (constants, cookie-jar, dates, delivery, cli-format, exhaustive)
+├── lib/                      small utilities (constants, cookie-jar, dates, delivery, menus, cli-format, redact, exhaustive)
 ├── queries/forkable.ts       GraphQL operation strings + variable types
 ├── schemas/forkable.ts       zod schemas — runtime validation + inferred types
 ├── config.ts                 loadSettings(env) — zod-validated env

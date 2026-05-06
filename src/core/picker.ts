@@ -3,6 +3,7 @@
 // No client knowledge here — easy to test with synthetic data.
 
 import { firstPieceWithVenue } from '../lib/delivery.ts';
+import { flattenItems } from '../lib/menus.ts';
 import {
   BUCKET_RANK,
   type Bucket,
@@ -13,7 +14,7 @@ import {
   type WeekResult,
   toCandidate,
 } from '../models.ts';
-import type { Delivery, Item, Menu } from '../schemas/forkable.ts';
+import type { Delivery, Menu } from '../schemas/forkable.ts';
 import { type TiebreakCandidate, breakTie } from './tiebreak.ts';
 
 export type AlternativesFn = (
@@ -177,21 +178,6 @@ async function pickOneDay(
 }
 
 // ─── small helpers ─────────────────────────────────────────────────────────
-
-type FlatItem = { menuName: string; menuId: number; item: Item };
-
-function flattenItems(menus: Menu[]): FlatItem[] {
-  const out: FlatItem[] = [];
-  for (const menu of menus) {
-    const menuName = menu.displayName ?? menu.name;
-    for (const section of menu.sections) {
-      for (const item of section.items) {
-        out.push({ menuName, menuId: menu.id, item });
-      }
-    }
-  }
-  return out;
-}
 
 function currentPieceRef(
   day: Delivery,

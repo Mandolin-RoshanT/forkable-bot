@@ -12,7 +12,8 @@ import { buildRows } from '../core/run-log.ts';
 import { formatPrice } from '../lib/cli-format.ts';
 import { thisWeekMonday } from '../lib/dates.ts';
 import { assertNever } from '../lib/exhaustive.ts';
-import { createLogger, redactEmail } from '../logger.ts';
+import { redactEmail } from '../lib/redact.ts';
+import { createLogger } from '../logger.ts';
 import type { DayResult, WeekResult } from '../models.ts';
 
 function runLogPath(from: string): string {

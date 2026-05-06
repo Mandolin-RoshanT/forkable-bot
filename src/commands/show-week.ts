@@ -8,9 +8,11 @@ import { loadSettings } from '../config.ts';
 import { bucketLabel, dayLabel, formatPrice, truncate } from '../lib/cli-format.ts';
 import { thisWeekMonday } from '../lib/dates.ts';
 import { firstPieceWithVenue } from '../lib/delivery.ts';
-import { createLogger, redactEmail } from '../logger.ts';
+import { type FlatItem, flattenItems } from '../lib/menus.ts';
+import { redactEmail } from '../lib/redact.ts';
+import { createLogger } from '../logger.ts';
 import { BUCKET_RANK, type Score, toCandidate } from '../models.ts';
-import type { Delivery, Item } from '../schemas/forkable.ts';
+import type { Delivery } from '../schemas/forkable.ts';
 
 export async function showWeek(args: string[]): Promise<number> {
   const noScore = args.includes('--no-score');
@@ -83,15 +85,7 @@ async function printEditableDay(
   }
 
   const menus = await client.getAlternatives(day.availableMenuIds, day.club.id);
-  const allItems: { menuName: string; item: Item }[] = [];
-  for (const menu of menus) {
-    const menuName = menu.displayName ?? menu.name;
-    for (const section of menu.sections) {
-      for (const item of section.items) {
-        allItems.push({ menuName, item });
-      }
-    }
-  }
+  const allItems = flattenItems(menus);
 
   if (scorer === null) {
     console.log(`  alternatives (${allItems.length}, unscored — pass an OPENAI_API_KEY to score):`);
@@ -103,13 +97,9 @@ async function printEditableDay(
     return;
   }
 
-  type Candidate = { menuName: string; item: Item; score: Score };
+  type Candidate = FlatItem & { score: Score };
   const scored: Candidate[] = await Promise.all(
-    allItems.map(async ({ menuName, item }) => ({
-      menuName,
-      item,
-      score: await scorer.score(toCandidate(item)),
-    })),
+    allItems.map(async (fi) => ({ ...fi, score: await scorer.score(toCandidate(fi.item)) })),
   );
 
   // Sort green → yellow → red, then by price asc within bucket.

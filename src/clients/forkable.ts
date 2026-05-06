@@ -7,8 +7,8 @@
 
 import { BROWSER_HEADERS, FORKABLE_GRAPHQL } from '../lib/constants.ts';
 import { CookieJar } from '../lib/cookie-jar.ts';
+import { redactCookie } from '../lib/redact.ts';
 import type { Logger } from '../logger.ts';
-import { redactCookie } from '../logger.ts';
 import {
   CREATE_SESSION_MUTATION,
   GET_ALTERNATIVES_QUERY,
