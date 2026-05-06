@@ -15,10 +15,9 @@ export async function run(argv: string[]): Promise<number> {
     case 'show-week':
       return showWeek(argv.slice(3));
     case 'dry-run':
-      return dryRun(argv.slice(3));
+      return runPicker(argv.slice(3), { dryRun: true });
     case 'pick':
-      console.error("'pick' not yet implemented (lands with the swap mutation)");
-      return 1;
+      return runPicker(argv.slice(3), { dryRun: false });
     default:
       console.error('usage: bun src/index.ts <show-week | dry-run> [YYYY-MM-DD]');
       return 1;
@@ -70,25 +69,27 @@ async function showWeek(args: string[]): Promise<number> {
 
 // ─── dry-run ───────────────────────────────────────────────────────────────
 
-async function dryRun(args: string[]): Promise<number> {
+async function runPicker(args: string[], opts: { dryRun: boolean }): Promise<number> {
   const dateArg = args.find((a) => !a.startsWith('--'));
 
-  // Resend keys aren't used by dry-run; stub them.
+  // Resend keys aren't used here yet (failure email lands in a follow-up);
+  // stub them so .env doesn't need everything to run the picker.
   const settings = loadSettings({
     ...process.env,
-    RESEND_API_KEY: process.env.RESEND_API_KEY || 'unused-by-dry-run',
+    RESEND_API_KEY: process.env.RESEND_API_KEY || 'unused-for-now',
     NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
     NOTIFY_FROM_EMAIL: process.env.NOTIFY_FROM_EMAIL || 'noreply@example.com',
   });
   const logger = createLogger(settings);
   logger.info(`account: ${redactEmail(settings.forkable.email)}`);
+  logger.info(opts.dryRun ? 'mode: DRY-RUN (no swaps will be issued)' : 'mode: LIVE');
 
   const client = new ForkableClient(settings.forkable, logger);
   await client.login();
   await client.me();
 
   const from = dateArg ?? thisWeekMonday();
-  logger.info(`dry-run for week of ${from}`);
+  logger.info(`picker target week: ${from}`);
   const days = await client.getWeek(from);
   if (days.length === 0) {
     logger.info('no deliveries for that week');
@@ -101,19 +102,21 @@ async function dryRun(args: string[]): Promise<number> {
     days,
     alternativesFor: (_deliveryId, menuIds, clubId) => client.getAlternatives(menuIds, clubId),
     score: (cand) => scorer.score(cand),
-    swap: async () => {
-      // dry-run: no real swap.
-    },
-    dryRun: true,
+    swap: opts.dryRun
+      ? async () => {
+          /* dry-run: no real swap */
+        }
+      : (input) => client.swapMeal(input),
+    dryRun: opts.dryRun,
   });
 
-  printWeekResult(result);
+  printWeekResult(result, opts.dryRun);
   return 0;
 }
 
-function printWeekResult(result: WeekResult): void {
+function printWeekResult(result: WeekResult, dryRun: boolean): void {
   console.log();
-  console.log(`DRY-RUN — WEEK OF ${result.from}`);
+  console.log(`${dryRun ? 'DRY-RUN' : 'LIVE'} — WEEK OF ${result.from}`);
   console.log('─'.repeat(80));
   for (const day of result.days) {
     printDayResult(day);

@@ -16,6 +16,8 @@ import {
   type GetAlternativesVariables,
   type GetWeekVariables,
   ME_QUERY,
+  REPLACE_PIECE_MUTATION,
+  type ReplacePieceVariables,
 } from '../queries/forkable.ts';
 import {
   CreateSessionResponseSchema,
@@ -25,6 +27,7 @@ import {
   GetWeekResponseSchema,
   MeResponseSchema,
   type Menu,
+  ReplacePieceResponseSchema,
 } from '../schemas/forkable.ts';
 
 // ─── Typed errors ──────────────────────────────────────────────────────────
@@ -166,6 +169,41 @@ export class ForkableClient {
     );
     const parsed = GetAlternativesResponseSchema.parse(raw);
     return parsed.menus;
+  }
+
+  // Swap the user's chosen piece for a different (menu, item) on the same day.
+  // Per locked v1 decision: selectionsHash={} (server fills modifier defaults).
+  // Throws ForkableNetworkError / ForkableError / ForkableSchemaError on
+  // failure; caller catches per-day so a single bad swap can't kill the run.
+  async swapMeal(args: {
+    deliveryId: number;
+    oldPieceId: string;
+    menuId: number;
+    itemId: number;
+  }): Promise<void> {
+    this.requireLogin('swapMeal');
+    const variables: ReplacePieceVariables = {
+      input: {
+        deliveryId: args.deliveryId,
+        oldPieceId: args.oldPieceId,
+        menuId: args.menuId,
+        itemId: args.itemId,
+        instructions: '',
+        selectionsHash: {},
+        fromTopRated: true,
+        topRatedType: 'venue_rating',
+        myMeals: true,
+      },
+    };
+    const raw = await this.post(
+      { operationName: 'ReplacePiece', query: REPLACE_PIECE_MUTATION, variables },
+      'ReplacePiece',
+    );
+    // Validate the shape; we don't need the value.
+    ReplacePieceResponseSchema.parse(raw);
+    this.logger.info(
+      `replacePiece → ok (delivery ${args.deliveryId}, menu ${args.menuId}, item ${args.itemId})`,
+    );
   }
 
   // ─── private ─────────────────────────────────────────────────────────────

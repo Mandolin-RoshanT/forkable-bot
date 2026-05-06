@@ -164,6 +164,98 @@ describe('ForkableClient — happy paths', () => {
       expect(m.sections.length).toBeGreaterThan(0);
     }
   });
+
+  test('swapMeal() sends locked input shape and parses the response', async () => {
+    let capturedVariables: unknown = null;
+    server.use(
+      // ReplacePiece-specific handler first — MSW checks handlers in registration
+      // order, and graphqlHandler() below is the fallback.
+      http.post(FORKABLE_GRAPHQL, async ({ request }) => {
+        const body = (await request.clone().json()) as {
+          operationName?: string;
+          variables?: unknown;
+        };
+        if (body.operationName !== 'ReplacePiece') {
+          // Let the next handler take it.
+          return undefined;
+        }
+        capturedVariables = body.variables;
+        return HttpResponse.json({
+          data: {
+            replacePiece: {
+              delivery: {
+                id: 1175988,
+                state: 'initial',
+                isReadOnly: false,
+                orders: [
+                  {
+                    id: 2580669,
+                    pieces: [
+                      {
+                        id: 'new-piece-uuid',
+                        itemId: 33,
+                        menuId: 17826,
+                        name: 'Beef Stew',
+                        price: 21.5,
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+        });
+      }),
+      // Fallback for warmup + CreateSession.
+      graphqlHandler({
+        CreateSession: () =>
+          HttpResponse.json(
+            {
+              data: {
+                createSession: { user: VALID_USER, errorAttributes: null, errorDetails: null },
+              },
+            },
+            { headers: SESSION_COOKIE_HEADERS },
+          ),
+      }),
+    );
+
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
+    await client.login();
+    await client.swapMeal({
+      deliveryId: 1175988,
+      oldPieceId: 'old-piece-uuid',
+      menuId: 17826,
+      itemId: 33,
+    });
+
+    // Locked v1 contract: selectionsHash is empty, mirror SPA analytics fields.
+    expect(capturedVariables).toEqual({
+      input: {
+        deliveryId: 1175988,
+        oldPieceId: 'old-piece-uuid',
+        menuId: 17826,
+        itemId: 33,
+        instructions: '',
+        selectionsHash: {},
+        fromTopRated: true,
+        topRatedType: 'venue_rating',
+        myMeals: true,
+      },
+    });
+  });
+
+  test('swapMeal() throws when called before login()', async () => {
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
+    await expect(
+      client.swapMeal({
+        deliveryId: 1,
+        oldPieceId: 'x',
+        menuId: 1,
+        itemId: 1,
+      }),
+    ).rejects.toThrow(/must login/);
+  });
 });
 
 // ─── Error paths ──────────────────────────────────────────────────────────
