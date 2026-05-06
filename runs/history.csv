@@ -1,0 +1,11 @@
+runAt,mode,date,kind,fromVenue,fromMeal,toVenue,toMeal,bucket,summary
+2026-05-06T21:31:40.127Z,dry-run,2026-05-04,LOCKED,,,,,,
+2026-05-06T21:31:40.127Z,dry-run,2026-05-05,LOCKED,,,,,,
+2026-05-06T21:31:40.127Z,dry-run,2026-05-06,LOCKED,,,,,,
+2026-05-06T21:31:40.127Z,dry-run,2026-05-07,LOCKED,,,,,,
+2026-05-06T21:31:40.127Z,dry-run,2026-05-08,SWAP,Leleka - SF,Chicken Dumplings,Palm House,Black Bean Plantain Wrap,yellow,Contains refined carbs from the wrap and moderate protein from black beans.
+2026-05-06T21:34:27.891Z,pick,2026-05-04,LOCKED,,,,,,
+2026-05-06T21:34:27.891Z,pick,2026-05-05,LOCKED,,,,,,
+2026-05-06T21:34:27.891Z,pick,2026-05-06,LOCKED,,,,,,
+2026-05-06T21:34:27.891Z,pick,2026-05-07,LOCKED,,,,,,
+2026-05-06T21:34:27.891Z,pick,2026-05-08,SWAP,Leleka - SF,Chicken Dumplings,Palm House,Black Bean Plantain Wrap,yellow,"Contains a wrap and moderate carbs from plantains, but includes beans and greens."

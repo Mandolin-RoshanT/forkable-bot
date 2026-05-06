@@ -1,0 +1,86 @@
+name: Weekly meal picker
+
+on:
+  # Friday 4pm PDT (= 23:00 UTC). One hour off during standard time but the
+  # cutoff window is wide enough that it doesn't matter.
+  schedule:
+    - cron: '0 23 * * 5'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'dry-run (preview) or pick (live swap)'
+        type: choice
+        options: [dry-run, pick]
+        default: dry-run
+
+# Block overlapping runs (a manual dispatch during the cron, etc.) but don't
+# cancel the in-flight one — a half-applied swap is worse than waiting.
+concurrency:
+  group: forkable-bot
+  cancel-in-progress: false
+
+# The post-run step pushes runs/history.csv back to the repo.
+permissions:
+  contents: write
+
+jobs:
+  pick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      FORKABLE_EMAIL: ${{ secrets.FORKABLE_EMAIL }}
+      FORKABLE_PASSWORD: ${{ secrets.FORKABLE_PASSWORD }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      NOTIFY_TO_EMAIL: ${{ secrets.NOTIFY_TO_EMAIL }}
+      # NOTIFY_FROM_EMAIL omitted — defaults to onboarding@resend.dev in
+      # src/config.ts. Set the secret + restore this line if you switch
+      # to a verified custom domain in Resend.
+    steps:
+      # Defensive masking so the password can't leak into logs even if a
+      # later step echoes process.env.
+      - name: Mask password
+        run: echo "::add-mask::${{ secrets.FORKABLE_PASSWORD }}"
+
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3'
+
+      - run: bun install --frozen-lockfile
+
+      # Cron has no `inputs.mode` so we default to dry-run during the M3
+      # validation window. M4 flips this default to `pick` once we've
+      # watched a full week of dry-runs match Roshan's manual picks.
+      - name: Run picker
+        run: bun src/index.ts ${{ inputs.mode || 'dry-run' }}
+
+      # Per-run artifact: captures runs/history.csv on every run including
+      # failures (always()). Default 90-day retention. Useful for grabbing
+      # the file from a single run page; long-term rolling history is in
+      # the committed runs/history.csv below.
+      - name: Upload run history (artifact)
+        if: always() && hashFiles('runs/history.csv') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-history-${{ github.run_id }}
+          path: runs/history.csv
+          retention-days: 90
+
+      # Append-only history. Each Friday adds 5 rows (~500 bytes); over a
+      # year this is ~26KB. The picker writes runs/history.csv directly;
+      # this step just commits + pushes whatever it produced. Skipped on
+      # failure so a half-state file never lands on main.
+      - name: Commit run history
+        if: success()
+        run: |
+          git config user.name 'forkable-bot'
+          git config user.email '${{ github.actor }}@users.noreply.github.com'
+          git add runs/
+          if git diff --staged --quiet; then
+            echo "no run-history changes to commit"
+          else
+            git commit -m "chore(runs): log picks for $(date -u +%Y-%m-%d)"
+            git push
+          fi

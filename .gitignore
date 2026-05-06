@@ -19,3 +19,4 @@ dist/
 .tldr/
 .cache/
 .claude/
+.cursor/
