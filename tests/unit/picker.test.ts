@@ -243,6 +243,43 @@ describe('pickWeek', () => {
     expect(swaps.calls).toHaveLength(0);
   });
 
+  test('one day failing does not block other days', async () => {
+    scoreByName.Default = 'red';
+    scoreByName.Better = 'green';
+    const failingDay = dayWithDefault(1, 100, 5, 'piece-1', '2026-05-07T12:00:00.000Z');
+    const goodDay = dayWithDefault(2, 100, 5, 'piece-2', '2026-05-08T12:00:00.000Z');
+    const menus = [
+      makeMenu(100, 'A', [{ id: 5, name: 'Default' }]),
+      makeMenu(200, 'B', [{ id: 7, name: 'Better' }]),
+    ];
+    const swaps = swapsFor();
+
+    const result = await pickWeek({
+      from: '2026-05-04',
+      days: [failingDay, goodDay],
+      // First call throws; second returns normal menus.
+      alternativesFor: (() => {
+        let calls = 0;
+        return async () => {
+          calls++;
+          if (calls === 1) {
+            throw new Error('transient network failure');
+          }
+          return menus;
+        };
+      })(),
+      score: scoreFn,
+      swap: swaps.fn,
+      dryRun: false,
+    });
+
+    expect(result.days).toHaveLength(2);
+    expect(result.days[0]?.kind).toBe('failed');
+    expect(result.days[1]?.kind).toBe('swapped');
+    // The good day still issued exactly one swap.
+    expect(swaps.calls).toHaveLength(1);
+  });
+
   test('failed scoring degrades to red; combined with non-red default = kept', async () => {
     // We never set scoreByName for these names → defaults to yellow, see scoreFn above
     scoreByName.Default = 'green';
