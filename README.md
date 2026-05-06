@@ -101,7 +101,7 @@ src/
 ├── clients/                  boundaries — talk to the outside world
 │   ├── forkable.ts           ForkableClient (login, getWeek, getAlternatives, swapMeal)
 │   ├── openai-scorer.ts      OpenAIScorer (LLM scoring, falls back to red on parse failure)
-│   ├── resend-mailer.ts      ResendMailer.fromEnv() (sendFailure, sendSummary)
+│   ├── resend-mailer.ts      ResendMailer.fromEnv() (sendFailure)
 │   └── run-log-writer.ts     CsvRunLogWriter — per-week CSV
 ├── core/                     pure logic, no I/O
 │   ├── picker.ts             pickWeek(args) — locked decisions (skip ORDERED, skip if default wins, all-red keeps default)
@@ -130,7 +130,7 @@ If Forkable changes a field, the next run fails fast with a `ZodError` naming th
 4. Update `src/queries/forkable.ts` and/or `src/schemas/forkable.ts` to match
 5. `bun run check` — `tests/integration/schemas.test.ts` parses the new captures
 
-The spike scripts (`scripts/{capture-ops,probe,introspect,verify-queries}.ts`) are kept as ongoing debug tooling, not throwaway code.
+The spike scripts (`scripts/{capture-ops,verify-queries}.ts`) are kept as ongoing debug tooling, not throwaway code.
 
 ## Troubleshooting
 

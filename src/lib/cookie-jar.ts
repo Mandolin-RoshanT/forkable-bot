@@ -7,10 +7,7 @@ export class CookieJar {
 
   // Read every Set-Cookie header on the response and add to the jar.
   add(headers: Headers): void {
-    // Bun/Node 18 expose getSetCookie() at runtime but DOM types lag.
-    const headersAny = headers as unknown as { getSetCookie?: () => string[] };
-    const lines = headersAny.getSetCookie?.() ?? [];
-    for (const line of lines) {
+    for (const line of headers.getSetCookie()) {
       const firstPair = line.split(';')[0]?.trim();
       if (!firstPair) {
         continue;

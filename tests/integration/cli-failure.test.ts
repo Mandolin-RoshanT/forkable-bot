@@ -41,12 +41,12 @@ function withTestEnv<T>(fn: () => Promise<T>): Promise<T> {
 // ─── tests ─────────────────────────────────────────────────────────────────
 
 describe('cli.run dispatch', () => {
-  test('unknown subcommand returns exit code 1 without crashing', async () => {
+  test('unknown subcommand returns exit code 1', async () => {
     const code = await run(['bun', 'src/index.ts', 'banana']);
     expect(code).toBe(1);
   });
 
-  test('no subcommand returns exit code 1 without crashing', async () => {
+  test('no subcommand returns exit code 1', async () => {
     const code = await run(['bun', 'src/index.ts']);
     expect(code).toBe(1);
   });

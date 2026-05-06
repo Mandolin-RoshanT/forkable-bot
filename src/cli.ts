@@ -22,9 +22,6 @@ import {
 } from './models.ts';
 import type { Delivery, Item } from './schemas/forkable.ts';
 
-// Each run writes a fresh per-week CSV at runs/<from>.csv. Re-running a
-// week (e.g. dry-run earlier in the week, then the cron) overwrites; old
-// weeks' files are left alone as standalone snapshots.
 function runLogPath(from: string): string {
   return `runs/${from}.csv`;
 }
@@ -124,11 +121,7 @@ async function runPicker(args: string[], opts: { dryRun: boolean }): Promise<num
       days,
       alternativesFor: (_deliveryId, menuIds, clubId) => client.getAlternatives(menuIds, clubId),
       score: (cand) => scorer.score(cand),
-      swap: opts.dryRun
-        ? async () => {
-            /* dry-run: no real swap */
-          }
-        : (input) => client.swapMeal(input),
+      swap: opts.dryRun ? async () => {} : (input) => client.swapMeal(input),
       dryRun: opts.dryRun,
     });
 

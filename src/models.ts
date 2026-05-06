@@ -5,6 +5,8 @@
 
 import { z } from 'zod';
 
+import type { Item } from './schemas/forkable.ts';
+
 // ─── Scoring ──────────────────────────────────────────────────────────────
 
 export const BucketSchema = z.enum(['green', 'yellow', 'red']);
@@ -30,8 +32,6 @@ export type MealCandidate = {
   ingredientTags: string[];
   dietLevel: number | null;
 };
-
-import type { Item } from './schemas/forkable.ts';
 
 export function toCandidate(item: Item): MealCandidate {
   return {

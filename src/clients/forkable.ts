@@ -230,10 +230,10 @@ export class ForkableClient {
     );
   }
 
-  // Public escape hatch for the spike scripts (capture-ops, probe, introspect)
-  // and any future ad-hoc tooling. Returns the full GraphQL response, errors
-  // and all — perfect for replay / probing where you want to inspect what the
-  // server said. Network errors (non-2xx) and malformed JSON still throw.
+  // Public escape hatch for capture-ops and any future ad-hoc tooling.
+  // Returns the full GraphQL response, errors and all — perfect for replay
+  // or probing where you want to inspect what the server said. Network
+  // errors (non-2xx) and malformed JSON still throw.
   async rawQuery(body: GraphQLBody, opLabel = 'rawQuery'): Promise<GraphQLResponse> {
     this.requireLogin(opLabel);
     return this.postRaw(body, opLabel);
