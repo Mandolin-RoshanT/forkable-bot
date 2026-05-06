@@ -88,7 +88,6 @@ type GraphQLResponse<T = unknown> = {
 
 export class ForkableClient {
   private readonly jar: CookieJar = new Map();
-  private loggedInUser: ForkableUser | null = null;
 
   constructor(
     private readonly settings: Settings,
@@ -98,6 +97,10 @@ export class ForkableClient {
   // Full login flow: warmup → createSession → confirm session cookie present.
   async login(): Promise<ForkableUser> {
     await this.warmup();
+
+    // Snapshot the jar so we can detect whether createSession added a cookie
+    // — the warmup ALB cookies are already there but they aren't auth.
+    const cookiesBeforeLogin = new Set(this.jar.keys());
 
     const raw = await this.post(
       {
@@ -127,21 +130,22 @@ export class ForkableClient {
       throw new ForkableAuthError('MFA is enabled — bot cannot proceed (PRD §7.1).');
     }
 
-    const sessionCookieName = this.findSessionCookieName();
+    const newCookies = [...this.jar.keys()].filter((k) => !cookiesBeforeLogin.has(k));
+    const sessionCookieName =
+      newCookies.find((n) => n.toLowerCase().includes('session')) ?? newCookies[0];
     if (!sessionCookieName) {
-      throw new ForkableAuthError('createSession returned no Set-Cookie — auth flow broken');
+      throw new ForkableAuthError('createSession set no new cookies — auth flow broken');
     }
-
     const cookieValue = this.jar.get(sessionCookieName) ?? '';
+
     this.logger.info(`createSession → ok (user ${session.user.id})`);
     this.logger.info(`cookie attached: ${sessionCookieName}=${redactCookie(cookieValue)}`);
 
-    this.loggedInUser = session.user;
     return session.user;
   }
 
   async me(): Promise<ForkableUser> {
-    const raw = await this.post({ query: ME_QUERY }, 'Me');
+    const raw = await this.post({ operationName: 'Me', query: ME_QUERY }, 'Me');
     const parsed = MeResponseSchema.parse(raw);
     if (!parsed.me) {
       throw new ForkableAuthError('me returned null — session cookie not accepted');
@@ -236,23 +240,21 @@ export class ForkableClient {
     const lines = headersAny.getSetCookie?.() ?? [];
     for (const line of lines) {
       const firstPair = line.split(';')[0]?.trim();
-      if (!firstPair) continue;
+      if (!firstPair) {
+        continue;
+      }
       const eq = firstPair.indexOf('=');
-      if (eq <= 0) continue;
+      if (eq <= 0) {
+        continue;
+      }
       this.jar.set(firstPair.slice(0, eq), firstPair.slice(eq + 1));
     }
   }
 
   private cookieHeader(): string | undefined {
-    if (this.jar.size === 0) return undefined;
-    return [...this.jar.entries()].map(([n, v]) => `${n}=${v}`).join('; ');
-  }
-
-  private findSessionCookieName(): string | undefined {
-    const names = [...this.jar.keys()];
-    for (const n of names) {
-      if (n.toLowerCase().includes('session')) return n;
+    if (this.jar.size === 0) {
+      return undefined;
     }
-    return names[0];
+    return [...this.jar.entries()].map(([n, v]) => `${n}=${v}`).join('; ');
   }
 }

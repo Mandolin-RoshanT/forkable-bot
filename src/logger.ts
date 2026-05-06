@@ -17,7 +17,7 @@ export function createLogger(settings: Settings): Logger {
     settings.forkable.password,
     settings.openaiApiKey,
     settings.resend.apiKey,
-  ].filter((s): s is string => Boolean(s) && s.length >= 4);
+  ].filter((s) => s.length >= 4);
 
   function scrub(msg: string): string {
     let out = msg;
