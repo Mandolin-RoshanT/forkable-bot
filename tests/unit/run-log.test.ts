@@ -108,17 +108,15 @@ describe('buildRows', () => {
 });
 
 describe('toCsv', () => {
-  test('emits a header on the first call (includeHeader: true)', () => {
-    const csv = toCsv([], { includeHeader: true });
-    expect(csv).toBe('');
+  test('returns empty string for empty rows', () => {
+    expect(toCsv([])).toBe('');
   });
 
-  test('first column is runAt, last is summary', () => {
+  test('always emits a header followed by data rows', () => {
     const rows = buildRows(RUN_AT, 'pick', fullWeek);
-    const csv = toCsv(rows, { includeHeader: true });
+    const csv = toCsv(rows);
     const [header, firstRow] = csv.split('\n');
-    expect(header?.startsWith('runAt,')).toBe(true);
-    expect(header?.endsWith(',summary')).toBe(true);
+    expect(header).toBe('runAt,mode,date,kind,fromVenue,fromMeal,toVenue,toMeal,bucket,summary');
     expect(firstRow?.startsWith(RUN_AT)).toBe(true);
   });
 
@@ -137,26 +135,16 @@ describe('toCsv', () => {
         summary: 'no quoting issues, just protein',
       },
     ];
-    const csv = toCsv(tricky, { includeHeader: false });
-    // Comma in venue → wrapped in quotes
+    const csv = toCsv(tricky);
     expect(csv).toContain('"Schlok\'s, Bagels & Lox"');
-    // Internal double-quotes doubled
     expect(csv).toContain('"Lox ""Special"""');
-    // Newline in cell → wrapped in quotes
     expect(csv).toContain('"Plain bagel\nnewline"');
   });
 
-  test('every line ends in a single newline', () => {
+  test('output ends in a single newline', () => {
     const rows = buildRows(RUN_AT, 'pick', fullWeek);
-    const csv = toCsv(rows, { includeHeader: true });
+    const csv = toCsv(rows);
     expect(csv.endsWith('\n')).toBe(true);
     expect(csv.endsWith('\n\n')).toBe(false);
-  });
-
-  test('omits the header when includeHeader is false', () => {
-    const rows = buildRows(RUN_AT, 'pick', fullWeek);
-    const csv = toCsv(rows, { includeHeader: false });
-    expect(csv.startsWith('runAt')).toBe(false);
-    expect(csv.startsWith(RUN_AT)).toBe(true);
   });
 });

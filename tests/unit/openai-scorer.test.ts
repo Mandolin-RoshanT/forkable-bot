@@ -4,10 +4,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import { type ChatCompleter, OpenAIScorer } from '../../src/clients/openai-scorer.ts';
-import type { Logger } from '../../src/logger.ts';
 import type { MealCandidate } from '../../src/models.ts';
-
-const silentLogger: Logger = { info: () => {}, error: () => {}, debug: () => {} };
+import { silentLogger } from '../fixtures/msw.ts';
 
 const sampleCandidate: MealCandidate = {
   name: 'Chicken and Broccoli Bowl',

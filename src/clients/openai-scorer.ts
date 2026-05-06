@@ -27,7 +27,7 @@ export class OpenAIScorer {
 
   async score(candidate: MealCandidate): Promise<Score> {
     const system = await this.loadRubric();
-    const user = JSON.stringify(serialize(candidate));
+    const user = JSON.stringify(candidate);
 
     let raw: string;
     try {
@@ -60,17 +60,6 @@ export class OpenAIScorer {
     }
     return this.rubric;
   }
-}
-
-// Trim the candidate to fields we actually want the LLM to weigh.
-function serialize(c: MealCandidate): Record<string, unknown> {
-  return {
-    name: c.name,
-    description: c.description,
-    price: c.price,
-    ingredientTags: c.ingredientTags,
-    dietLevel: c.dietLevel,
-  };
 }
 
 // Production factory — wires up the real OpenAI SDK behind ChatCompleter.

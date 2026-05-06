@@ -74,7 +74,7 @@ cp .env.example .env
 # RESEND_API_KEY only needed if you want to test the failure-email path locally
 
 bun install
-bun run check          # typecheck + lint + tests (75 tests)
+bun run check          # typecheck + lint + tests (90 tests)
 ```
 
 ### Commands
@@ -101,7 +101,7 @@ src/
 ├── clients/                  boundaries — talk to the outside world
 │   ├── forkable.ts           ForkableClient (login, getWeek, getAlternatives, swapMeal)
 │   ├── openai-scorer.ts      OpenAIScorer (LLM scoring, falls back to red on parse failure)
-│   ├── resend-mailer.ts      ResendMailer.fromEnv() (sendFailure, sendSummary)
+│   ├── resend-mailer.ts      ResendMailer.fromEnv() (sendFailure)
 │   └── run-log-writer.ts     CsvRunLogWriter — per-week CSV
 ├── core/                     pure logic, no I/O
 │   ├── picker.ts             pickWeek(args) — locked decisions (skip ORDERED, skip if default wins, all-red keeps default)
@@ -118,7 +118,7 @@ src/
 └── index.ts                  thin entry point with top-level catch
 ```
 
-Tests live in `tests/{unit,integration,fixtures}/` (75 tests; `bun test`).
+Tests live in `tests/{unit,integration,fixtures}/` (90 tests; `bun test`).
 
 ## Schema-drift recovery
 
@@ -130,7 +130,7 @@ If Forkable changes a field, the next run fails fast with a `ZodError` naming th
 4. Update `src/queries/forkable.ts` and/or `src/schemas/forkable.ts` to match
 5. `bun run check` — `tests/integration/schemas.test.ts` parses the new captures
 
-The spike scripts (`scripts/{capture-ops,probe,introspect,verify-queries}.ts`) are kept as ongoing debug tooling, not throwaway code.
+The spike scripts (`scripts/{capture-ops,verify-queries}.ts`) are kept as ongoing debug tooling, not throwaway code.
 
 ## Troubleshooting
 
@@ -140,12 +140,10 @@ The spike scripts (`scripts/{capture-ops,probe,introspect,verify-queries}.ts`) a
 | `MFA is enabled — bot cannot proceed` | MFA was enabled on the Forkable account | Disable MFA, or wait for the bot to support TOTP |
 | `createSession set no new cookies — auth flow broken` | The auth path changed at the edge | Re-capture the `createSession` mutation per `scripts/CAPTURE.md` |
 | `HTTP 401 Unauthorized` | AWS ALB sticky-cookie warmup broke | Forkable changed their LB config; usually transient |
-| `introspection BLOCKED` | Expected — Forkable disables introspection in production | No action needed; the bot doesn't rely on it |
 | `Invalid configuration: …` | A required env var is missing | The error names the field; check the secrets in your fork |
 
 ## Living docs
 
 - `TODO.md` — known cleanups + improvements deferred for after M4
-- `scripts/SPIKE_FINDINGS.md` — historical record of M1 schema discovery
 - `scripts/CAPTURE.md` — DevTools capture protocol
 - [Issue #3](https://github.com/Mandolin-RoshanT/forkable-bot/issues/3) — multi-user / hosted-service direction

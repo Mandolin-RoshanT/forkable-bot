@@ -286,13 +286,9 @@ describe('ForkableClient — transport errors', () => {
 
     const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
-    try {
-      await client.getWeek('2026-05-04');
-      throw new Error('expected ForkableNetworkError');
-    } catch (err) {
-      expect(err).toBeInstanceOf(ForkableNetworkError);
-      expect((err as ForkableNetworkError).status).toBe(500);
-    }
+    const err = (await client.getWeek('2026-05-04').catch((e) => e)) as ForkableNetworkError;
+    expect(err).toBeInstanceOf(ForkableNetworkError);
+    expect(err.status).toBe(500);
   });
 
   test('throws ForkableSchemaError on non-JSON response', async () => {
@@ -306,6 +302,23 @@ describe('ForkableClient — transport errors', () => {
     const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
     await expect(client.getWeek('2026-05-04')).rejects.toBeInstanceOf(ForkableSchemaError);
+  });
+
+  test('getAlternatives() throws ForkableNetworkError on 500', async () => {
+    server.use(
+      graphqlHandler({
+        CreateSession: createSessionOk,
+        GetAlternatives: () => new HttpResponse('Internal Server Error', { status: 500 }),
+      }),
+    );
+
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
+    await client.login();
+    const err = (await client
+      .getAlternatives([1, 2, 3], 6059)
+      .catch((e) => e)) as ForkableNetworkError;
+    expect(err).toBeInstanceOf(ForkableNetworkError);
+    expect(err.status).toBe(500);
   });
 
   test('throws ForkableError on GraphQL-level errors in response', async () => {

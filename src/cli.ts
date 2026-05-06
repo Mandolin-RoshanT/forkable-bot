@@ -6,15 +6,25 @@ import { type OpenAIScorer, createOpenAIScorer } from './clients/openai-scorer.t
 import { ResendMailer } from './clients/resend-mailer.ts';
 import { CsvRunLogWriter } from './clients/run-log-writer.ts';
 import { loadSettings } from './config.ts';
-import { pickWeek, toCandidate } from './core/picker.ts';
+import { pickWeek } from './core/picker.ts';
 import { buildRows } from './core/run-log.ts';
 import { thisWeekMonday } from './lib/dates.ts';
+import { firstPieceWithVenue } from './lib/delivery.ts';
 import { assertNever } from './lib/exhaustive.ts';
 import { createLogger, redactEmail } from './logger.ts';
-import type { Bucket, DayResult, Score, WeekResult } from './models.ts';
+import {
+  BUCKET_RANK,
+  type Bucket,
+  type DayResult,
+  type Score,
+  type WeekResult,
+  toCandidate,
+} from './models.ts';
 import type { Delivery, Item } from './schemas/forkable.ts';
 
-const RUN_LOG_PATH = 'runs/history.csv';
+function runLogPath(from: string): string {
+  return `runs/${from}.csv`;
+}
 
 export async function run(argv: string[]): Promise<number> {
   const cmd = argv[2];
@@ -26,7 +36,7 @@ export async function run(argv: string[]): Promise<number> {
     case 'pick':
       return runPicker(argv.slice(3), { dryRun: false });
     default:
-      console.error('usage: bun src/index.ts <show-week | dry-run> [YYYY-MM-DD]');
+      console.error('usage: bun src/index.ts <show-week | dry-run | pick> [YYYY-MM-DD]');
       return 1;
   }
 }
@@ -37,12 +47,12 @@ async function showWeek(args: string[]): Promise<number> {
   const noScore = args.includes('--no-score');
   const dateArg = args.find((a) => !a.startsWith('--'));
 
-  // Resend keys aren't used here. OpenAI is also unused if --no-score.
-  // Stub both so .env doesn't need to be fully populated for a read-only flow.
+  // Resend keys aren't used here. OpenAI is also unused if --no-score, in
+  // which case we stub the key so .env doesn't need to be fully populated
+  // for a read-only flow.
   const settings = loadSettings({
     ...process.env,
-    OPENAI_API_KEY:
-      process.env.OPENAI_API_KEY || (noScore ? 'unused-by-no-score' : process.env.OPENAI_API_KEY),
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || (noScore ? 'unused-by-no-score' : undefined),
     RESEND_API_KEY: process.env.RESEND_API_KEY || 'unused-by-show-week',
     NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
   });
@@ -111,18 +121,14 @@ async function runPicker(args: string[], opts: { dryRun: boolean }): Promise<num
       days,
       alternativesFor: (_deliveryId, menuIds, clubId) => client.getAlternatives(menuIds, clubId),
       score: (cand) => scorer.score(cand),
-      swap: opts.dryRun
-        ? async () => {
-            /* dry-run: no real swap */
-          }
-        : (input) => client.swapMeal(input),
+      swap: opts.dryRun ? async () => {} : (input) => client.swapMeal(input),
       dryRun: opts.dryRun,
     });
 
     if (!skipLog) {
-      const writer = new CsvRunLogWriter(RUN_LOG_PATH, logger);
+      const writer = new CsvRunLogWriter(runLogPath(from), logger);
       const rows = buildRows(new Date().toISOString(), opts.dryRun ? 'dry-run' : 'pick', result);
-      await writer.append(rows);
+      await writer.write(rows);
     }
 
     printWeekResult(result, opts.dryRun);
@@ -240,10 +246,10 @@ async function printEditableDay(
 ): Promise<void> {
   console.log(`${dayLabel(day)}  EDITABLE`);
 
-  const current = currentPiece(day);
-  if (current) {
-    const venue = currentVenueName(day) ?? '(unknown venue)';
-    console.log(`  current: ${venue} — ${current.name} (${formatPrice(current.price)})`);
+  const fpv = firstPieceWithVenue(day);
+  if (fpv) {
+    const venue = fpv.venueName ?? '(unknown venue)';
+    console.log(`  current: ${venue} — ${fpv.piece.name} (${formatPrice(fpv.piece.price)})`);
   } else {
     console.log('  current: (none)');
   }
@@ -285,7 +291,7 @@ async function printEditableDay(
 
   // Sort green → yellow → red, then by price asc within bucket.
   scored.sort((a, b) => {
-    const r = bucketRank(a.score.bucket) - bucketRank(b.score.bucket);
+    const r = BUCKET_RANK[b.score.bucket] - BUCKET_RANK[a.score.bucket];
     if (r !== 0) return r;
     return (a.item.price ?? 0) - (b.item.price ?? 0);
   });
@@ -304,34 +310,6 @@ function dayLabel(day: Delivery): string {
   const d = new Date(day.forDeliveryAt);
   const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()];
   return `${dow} ${day.forDeliveryAt.slice(0, 10)}`;
-}
-
-function currentPiece(day: Delivery): Delivery['orders'][number]['pieces'][number] | undefined {
-  for (const order of day.orders) {
-    const piece = order.pieces[0];
-    if (piece) return piece;
-  }
-  return undefined;
-}
-
-function currentVenueName(day: Delivery): string | undefined {
-  for (const order of day.orders) {
-    if (order.pieces.length > 0) {
-      return order.menu?.name;
-    }
-  }
-  return undefined;
-}
-
-function bucketRank(b: Bucket): number {
-  switch (b) {
-    case 'green':
-      return 0;
-    case 'yellow':
-      return 1;
-    case 'red':
-      return 2;
-  }
 }
 
 function bucketLabel(b: Bucket): string {

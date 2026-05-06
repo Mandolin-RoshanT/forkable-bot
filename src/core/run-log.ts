@@ -99,14 +99,11 @@ function buildRow(runAt: string, mode: RunMode, day: DayResult): RunLogRow {
   }
 }
 
-export function toCsv(rows: RunLogRow[], opts: { includeHeader: boolean }): string {
+export function toCsv(rows: RunLogRow[]): string {
   if (rows.length === 0) {
     return '';
   }
-  const lines: string[] = [];
-  if (opts.includeHeader) {
-    lines.push(HEADER.join(','));
-  }
+  const lines: string[] = [HEADER.join(',')];
   for (const row of rows) {
     lines.push(HEADER.map((col) => escapeCell(row[col])).join(','));
   }

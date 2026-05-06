@@ -5,10 +5,17 @@
 
 import { z } from 'zod';
 
+import type { Item } from './schemas/forkable.ts';
+
 // ─── Scoring ──────────────────────────────────────────────────────────────
 
 export const BucketSchema = z.enum(['green', 'yellow', 'red']);
 export type Bucket = z.infer<typeof BucketSchema>;
+
+// Higher = better. The picker uses this to find each day's top bucket;
+// CLI printing uses it (descending) to sort scored alternatives so green
+// comes first.
+export const BUCKET_RANK: Record<Bucket, number> = { red: 0, yellow: 1, green: 2 };
 
 export const ScoreSchema = z.object({
   bucket: BucketSchema,
@@ -16,8 +23,8 @@ export const ScoreSchema = z.object({
 });
 export type Score = z.infer<typeof ScoreSchema>;
 
-// What we hand to the scorer. Slim view of a Forkable Item — the picker
-// extracts these fields from src/schemas/forkable.Item before scoring.
+// What we hand to the scorer. Slim view of a Forkable Item — toCandidate()
+// projects the Item's wire fields down to just what the LLM weighs.
 export type MealCandidate = {
   name: string;
   description: string | null;
@@ -25,6 +32,16 @@ export type MealCandidate = {
   ingredientTags: string[];
   dietLevel: number | null;
 };
+
+export function toCandidate(item: Item): MealCandidate {
+  return {
+    name: item.name,
+    description: item.description,
+    price: item.price,
+    ingredientTags: item.ingredientTags,
+    dietLevel: item.dietLevel,
+  };
+}
 
 // ─── Picker results ───────────────────────────────────────────────────────
 

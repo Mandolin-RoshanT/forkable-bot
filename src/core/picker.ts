@@ -2,11 +2,19 @@
 // alternatives, score, swap), decides what to do for each editable day.
 // No client knowledge here — easy to test with synthetic data.
 
-import type { Bucket, DayResult, MealCandidate, Score, SimpleMeal, WeekResult } from '../models.ts';
+import { firstPieceWithVenue } from '../lib/delivery.ts';
+import {
+  BUCKET_RANK,
+  type Bucket,
+  type DayResult,
+  type MealCandidate,
+  type Score,
+  type SimpleMeal,
+  type WeekResult,
+  toCandidate,
+} from '../models.ts';
 import type { Delivery, Item, Menu } from '../schemas/forkable.ts';
 import { type TiebreakCandidate, breakTie } from './tiebreak.ts';
-
-const BUCKET_RANK: Record<Bucket, number> = { red: 0, yellow: 1, green: 2 };
 
 export type AlternativesFn = (
   deliveryId: number,
@@ -188,23 +196,9 @@ function flattenItems(menus: Menu[]): FlatItem[] {
 function currentPieceRef(
   day: Delivery,
 ): { menuId: number; itemId: number; oldPieceId: string } | undefined {
-  for (const order of day.orders) {
-    const piece = order.pieces[0];
-    if (piece) {
-      return { menuId: piece.menuId, itemId: piece.itemId, oldPieceId: piece.id };
-    }
-  }
-  return undefined;
-}
-
-export function toCandidate(item: Item): MealCandidate {
-  return {
-    name: item.name,
-    description: item.description,
-    price: item.price,
-    ingredientTags: item.ingredientTags,
-    dietLevel: item.dietLevel,
-  };
+  const fpv = firstPieceWithVenue(day);
+  if (!fpv) return undefined;
+  return { menuId: fpv.piece.menuId, itemId: fpv.piece.itemId, oldPieceId: fpv.piece.id };
 }
 
 function simpleMeal(c: TiebreakCandidate): SimpleMeal {

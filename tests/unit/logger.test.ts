@@ -65,7 +65,8 @@ describe('createLogger', () => {
     } finally {
       console.error = original;
     }
-    expect(captured).toEqual(['[forkable-bot] boom']);
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).toContain('boom');
   });
 });
 

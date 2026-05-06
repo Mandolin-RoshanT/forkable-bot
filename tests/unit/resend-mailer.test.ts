@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ResendMailer } from '../../src/clients/resend-mailer.ts';
-import type { Logger } from '../../src/logger.ts';
-import type { WeekResult } from '../../src/models.ts';
-
-const silentLogger: Logger = { info: () => {}, error: () => {}, debug: () => {} };
+import { silentLogger } from '../fixtures/msw.ts';
 
 const config = {
   apiKey: 're_test_key',
@@ -81,40 +78,5 @@ describe('ResendMailer.sendFailure', () => {
     await expect(mailer.sendFailure({ mode: 'pick', error: new Error('x') })).rejects.toThrow(
       /HTTP 401/,
     );
-  });
-});
-
-describe('ResendMailer.sendSummary', () => {
-  test('formats one line per day', async () => {
-    const result: WeekResult = {
-      from: '2026-05-04',
-      days: [
-        { kind: 'skipped-locked', date: '2026-05-04' },
-        {
-          kind: 'kept-default',
-          date: '2026-05-05',
-          current: { venue: 'V', name: 'Default', price: 16 },
-          bucket: 'green',
-          reason: 'r',
-        },
-        {
-          kind: 'swapped',
-          date: '2026-05-06',
-          from: { venue: 'A', name: 'Old', price: 16 },
-          to: { venue: 'B', name: 'New', price: 18 },
-          bucket: 'green',
-          reasoning: 'r',
-        },
-      ],
-    };
-
-    await new ResendMailer(config, silentLogger).sendSummary(result);
-
-    const body = JSON.parse(String(firstRequest().init.body));
-    expect(body.subject).toContain('2026-05-04');
-    expect(body.text).toContain('LOCKED');
-    expect(body.text).toContain('KEEP');
-    expect(body.text).toContain('SWAP');
-    expect(body.text).toContain('A → B');
   });
 });

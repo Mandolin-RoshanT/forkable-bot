@@ -1,6 +1,6 @@
 # Test suite
 
-76 tests across 12 files (`bun test`). Three layers, three mocking strategies — each chosen to test the unit at the right level without leaking the layer below it into the test.
+90 tests across 14 files (`bun test`). Three layers, three mocking strategies — each chosen to test the unit at the right level without leaking the layer below it into the test.
 
 ## Quick grid
 
@@ -9,10 +9,12 @@
 | File | Module under test | What it tests | How it mocks |
 |---|---|---|---|
 | `config.test.ts` | `src/config.ts` | env validation, required-field errors, `NOTIFY_FROM_EMAIL` default + empty-string fallback | synthetic `env` object passed to `loadSettings(env)` |
+| `cookie-jar.test.ts` | `src/lib/cookie-jar.ts` | parses `Set-Cookie` headers, skips malformed lines, snapshot/diff detects new cookies, `serialize()` returns undefined on empty jar | real `Headers` objects |
+| `dates.test.ts` | `src/lib/dates.ts` | `thisWeekMonday(now)` for Monday/Friday/Sunday inputs; default arg returns a Monday-shaped string | injected `Date` |
 | `logger.test.ts` | `src/logger.ts` | secret scrubbing across `info`/`error`/`debug`, `debug` gating, `error` → stderr | captured `console.log` / `console.error` |
 | `openai-scorer.test.ts` | `src/clients/openai-scorer.ts` | green/red parsing, four parse-failure paths (non-JSON, wrong shape, bad enum, OpenAI throws), only relevant fields go to the LLM | injected `ChatCompleter` fake (no real OpenAI call) |
-| `picker.test.ts` | `src/core/picker.ts` | locked-day skip, kept-default, swap, dry-run noop, idempotency, all-red keeps default, per-day failure isolation | synthetic `Delivery` + `Menu` factories + injected callables |
-| `resend-mailer.test.ts` | `src/clients/resend-mailer.ts` | bearer-auth header, JSON body shape, throw on non-2xx, summary email format | monkey-patched `globalThis.fetch` |
+| `picker.test.ts` | `src/core/picker.ts` | locked-day skip, kept-default, swap, dry-run noop, idempotency, all-red keeps default, per-day failure isolation, no-default branch | synthetic `Delivery` + `Menu` factories + injected callables |
+| `resend-mailer.test.ts` | `src/clients/resend-mailer.ts` | bearer-auth header, JSON body shape, throw on non-2xx | monkey-patched `globalThis.fetch` |
 | `run-log.test.ts` | `src/core/run-log.ts` | every `DayResult.kind` → row shape, RFC-4180 escaping (commas, `"`, newlines), header always emitted, `mode` column | synthetic `WeekResult` |
 | `run-log-writer.test.ts` | `src/clients/run-log-writer.ts` | overwrite-on-write (vs append), parent-dir creation, no-op on empty rows | tempdir-isolated filesystem (`mkdtemp` per test) |
 | `tiebreak.test.ts` | `src/core/tiebreak.ts` | empty-input throw, single candidate, price preference, venue-variety preference, stable input-order tiebreak, null-price fallback | synthetic candidates |
@@ -24,7 +26,7 @@
 | `forkable.test.ts` | `ForkableClient` end-to-end | happy paths (login/me/getWeek/getAlternatives/swapMeal), auth errors, transport errors, schema errors, **`replacePiece` locked input shape** (`selectionsHash: {}`), `requireLogin` guard | MSW server + `graphqlHandler` (warmup-401 baked in) |
 | `schemas.test.ts` | Zod schemas vs real captured JSON | schema-drift tripwire — every Forkable response shape we depend on parses the actual captured payloads | real captured JSON files in `scripts/captures/` |
 | `e2e.test.ts` | picker + ForkableClient + Zod schemas + swap mutation | full pipeline with real captures: locked days skipped, editable day swaps to the green item, dry-run never invokes swap | MSW serving captured JSON + stub `ChatCompleter` |
-| `cli-failure.test.ts` | `runPicker` → `ResendMailer` | the PRD §13 failure-email path — when login fails or network 500s, `sendFailure` actually hits Resend with the right subject/body | MSW for both `forkable.com` and `api.resend.com` + scoped env mutation |
+| `cli-failure.test.ts` | `cli.run` + `runPicker` → `ResendMailer` | unknown/missing subcommand returns exit 1; PRD §13 failure-email path — when login fails or network 500s, `sendFailure` actually hits Resend with the right subject/body | MSW for both `forkable.com` and `api.resend.com` + scoped env mutation |
 
 ### Fixtures (`tests/fixtures/`)
 
@@ -35,7 +37,7 @@
 ## Running tests
 
 ```sh
-bun test                       # all 76 tests
+bun test                       # all 90 tests
 bun test tests/unit/           # unit only (~50 tests)
 bun test tests/integration/    # integration only (~25 tests)
 bun test tests/unit/picker     # one file
