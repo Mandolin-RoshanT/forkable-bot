@@ -19,6 +19,10 @@ concurrency:
   group: forkable-bot
   cancel-in-progress: false
 
+# The post-run step pushes runs/history.csv back to the repo.
+permissions:
+  contents: write
+
 jobs:
   pick:
     runs-on: ubuntu-latest
@@ -49,3 +53,19 @@ jobs:
       # watched a full week of dry-runs match Roshan's manual picks.
       - name: Run picker
         run: bun src/index.ts ${{ inputs.mode || 'dry-run' }}
+
+      # Append-only history. Each Friday adds 5 rows (~500 bytes); over a
+      # year this is ~26KB. The picker writes runs/history.csv directly;
+      # this step just commits + pushes whatever it produced.
+      - name: Commit run history
+        if: success()
+        run: |
+          git config user.name 'forkable-bot'
+          git config user.email '${{ github.actor }}@users.noreply.github.com'
+          git add runs/
+          if git diff --staged --quiet; then
+            echo "no run-history changes to commit"
+          else
+            git commit -m "chore(runs): log picks for $(date -u +%Y-%m-%d)"
+            git push
+          fi

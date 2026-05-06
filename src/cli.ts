@@ -4,13 +4,17 @@
 import { ForkableClient } from './clients/forkable.ts';
 import { type OpenAIScorer, createOpenAIScorer } from './clients/openai-scorer.ts';
 import { ResendMailer } from './clients/resend-mailer.ts';
+import { CsvRunLogWriter } from './clients/run-log-writer.ts';
 import { loadSettings } from './config.ts';
 import { pickWeek, toCandidate } from './core/picker.ts';
+import { buildRows } from './core/run-log.ts';
 import { thisWeekMonday } from './lib/dates.ts';
 import { assertNever } from './lib/exhaustive.ts';
 import { createLogger, redactEmail } from './logger.ts';
 import type { Bucket, DayResult, Score, WeekResult } from './models.ts';
 import type { Delivery, Item } from './schemas/forkable.ts';
+
+const RUN_LOG_PATH = 'runs/history.csv';
 
 export async function run(argv: string[]): Promise<number> {
   const cmd = argv[2];
@@ -74,6 +78,7 @@ async function showWeek(args: string[]): Promise<number> {
 
 async function runPicker(args: string[], opts: { dryRun: boolean }): Promise<number> {
   const dateArg = args.find((a) => !a.startsWith('--'));
+  const skipLog = args.includes('--no-log');
 
   // Stub anything missing so .env doesn't need to be fully populated to
   // exercise the picker locally. Production cron has all secrets.
@@ -115,6 +120,12 @@ async function runPicker(args: string[], opts: { dryRun: boolean }): Promise<num
         : (input) => client.swapMeal(input),
       dryRun: opts.dryRun,
     });
+
+    if (!skipLog) {
+      const writer = new CsvRunLogWriter(RUN_LOG_PATH, logger);
+      const rows = buildRows(new Date().toISOString(), opts.dryRun ? 'dry-run' : 'pick', result);
+      await writer.append(rows);
+    }
 
     printWeekResult(result, opts.dryRun);
     return 0;

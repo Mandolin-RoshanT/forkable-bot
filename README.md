@@ -27,10 +27,17 @@ bun run show-week              # print next week's days + scored alternatives
 bun run show-week --no-score   # same, without OpenAI calls
 bun run show-week 2026-05-04   # specific Monday
 bun run dry-run                # what the picker would do — no writes
+bun run dry-run --no-log       # …and don't append a row to runs/history.csv
 bun run pick                   # live: scores, swaps, posts
 bun run verify                 # ForkableClient + schemas against live API
 bun run spike                  # spike: log in + replay scripts/captures/raw/*.json
 ```
+
+Each `dry-run` and `pick` invocation appends one row per day to
+`runs/history.csv` (`runAt, mode, date, kind, fromVenue, fromMeal,
+toVenue, toMeal, bucket, summary`). The Friday cron commits this file
+back to the repo so every run leaves a diff-able trail. Pass `--no-log`
+locally if you don't want test runs to dirty git.
 
 ## Architecture
 

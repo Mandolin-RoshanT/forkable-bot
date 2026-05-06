@@ -9,12 +9,7 @@ import { describe, expect, test } from 'bun:test';
 import { http, HttpResponse } from 'msw';
 
 import { run } from '../../src/cli.ts';
-import {
-  FORKABLE_GRAPHQL,
-  RESEND_ENDPOINT,
-  createTestServer,
-  graphqlHandler,
-} from '../fixtures/msw.ts';
+import { RESEND_ENDPOINT, createTestServer, graphqlHandler } from '../fixtures/msw.ts';
 
 const server = createTestServer({ onUnhandledRequest: 'bypass' });
 
@@ -50,7 +45,6 @@ describe('runPicker failure → mailer.sendFailure', () => {
     const resendCalls: { subject: string; text: string }[] = [];
 
     server.use(
-      // createSession returns "no user" → ForkableAuthError.
       graphqlHandler({
         CreateSession: () =>
           HttpResponse.json({
@@ -63,7 +57,6 @@ describe('runPicker failure → mailer.sendFailure', () => {
             },
           }),
       }),
-      // Capture the Resend POST so we can assert the failure email was sent.
       http.post(RESEND_ENDPOINT, async ({ request }) => {
         const body = (await request.json()) as { subject: string; text: string };
         resendCalls.push(body);
@@ -87,16 +80,8 @@ describe('runPicker failure → mailer.sendFailure', () => {
     const resendCalls: { subject: string }[] = [];
 
     server.use(
-      http.post(FORKABLE_GRAPHQL, async ({ request }) => {
-        const body = (await request.clone().json()) as { query: string };
-        if (body.query?.includes('__typename')) {
-          return new HttpResponse(null, {
-            status: 401,
-            headers: { 'Set-Cookie': 'AWSALBTG=warm; Path=/' },
-          });
-        }
-        // Any non-warmup request: 500.
-        return new HttpResponse('boom', { status: 500 });
+      graphqlHandler({
+        CreateSession: () => new HttpResponse('boom', { status: 500 }),
       }),
       http.post(RESEND_ENDPOINT, async ({ request }) => {
         resendCalls.push((await request.json()) as { subject: string });

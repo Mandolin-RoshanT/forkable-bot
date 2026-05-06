@@ -2,6 +2,8 @@
 
 import type { Logger } from '../../src/logger.ts';
 
+export { redactCookie, redactEmail } from '../../src/logger.ts';
+
 export function log(msg: string): void {
   console.log(`[capture-ops] ${msg}`);
 }
@@ -24,17 +26,3 @@ export const captureOpsLogger: Logger = {
   error: logError,
   debug: logDebug,
 };
-
-export function redactCookie(value: string): string {
-  return `<${value.length} chars, prefix: ${value.slice(0, 4)}>`;
-}
-
-export function redactEmail(email: string): string {
-  const parts = email.split('@');
-  const user = parts[0];
-  const domain = parts[1];
-  if (!user || !domain) {
-    return '<invalid email>';
-  }
-  return `${user[0]}***@${domain}`;
-}

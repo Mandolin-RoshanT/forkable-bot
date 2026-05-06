@@ -4,7 +4,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { type ScoreFn, type SwapFn, pickWeek } from '../../src/core/picker.ts';
-import type { Bucket, Score } from '../../src/models.ts';
+import type { Bucket } from '../../src/models.ts';
 import type { Delivery, Menu } from '../../src/schemas/forkable.ts';
 
 // ─── factories ─────────────────────────────────────────────────────────────
@@ -86,7 +86,7 @@ function dayWithDefault(
 const scoreByName: Record<string, Bucket> = {};
 const scoreFn: ScoreFn = async (cand) => {
   const bucket = scoreByName[cand.name] ?? 'yellow';
-  return { bucket, reasoning: `mock: ${bucket}` } as Score;
+  return { bucket, reasoning: `mock: ${bucket}` };
 };
 
 function makeAlternativesFn(menus: Menu[]) {
@@ -192,8 +192,8 @@ describe('pickWeek', () => {
       dryRun: true,
     });
 
-    expect(result.days[0]?.kind).toBe('swapped'); // result still says "would swap"
-    expect(swaps.calls).toHaveLength(0); // but no real call
+    expect(result.days[0]?.kind).toBe('swapped');
+    expect(swaps.calls).toHaveLength(0);
   });
 
   test('idempotency: a second run on the post-swap state issues no swaps', async () => {
@@ -257,7 +257,6 @@ describe('pickWeek', () => {
     const result = await pickWeek({
       from: '2026-05-04',
       days: [failingDay, goodDay],
-      // First call throws; second returns normal menus.
       alternativesFor: (() => {
         let calls = 0;
         return async () => {
@@ -276,7 +275,6 @@ describe('pickWeek', () => {
     expect(result.days).toHaveLength(2);
     expect(result.days[0]?.kind).toBe('failed');
     expect(result.days[1]?.kind).toBe('swapped');
-    // The good day still issued exactly one swap.
     expect(swaps.calls).toHaveLength(1);
   });
 
