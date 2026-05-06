@@ -29,42 +29,12 @@ import {
   type Menu,
   ReplacePieceResponseSchema,
 } from '../schemas/forkable.ts';
-
-// ─── Typed errors ──────────────────────────────────────────────────────────
-
-export class ForkableError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = 'ForkableError';
-  }
-}
-
-export class ForkableAuthError extends ForkableError {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = 'ForkableAuthError';
-  }
-}
-
-export class ForkableNetworkError extends ForkableError {
-  constructor(
-    message: string,
-    public readonly status: number,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-    this.name = 'ForkableNetworkError';
-  }
-}
-
-export class ForkableSchemaError extends ForkableError {
-  constructor(message: string, cause: unknown) {
-    super(message, { cause });
-    this.name = 'ForkableSchemaError';
-  }
-}
-
-// ─── Client ────────────────────────────────────────────────────────────────
+import {
+  ForkableAuthError,
+  ForkableError,
+  ForkableNetworkError,
+  ForkableSchemaError,
+} from './forkable-errors.ts';
 
 export type ForkableCreds = { email: string; password: string };
 
