@@ -3,6 +3,7 @@
 
 import { ForkableClient } from './clients/forkable.ts';
 import { type OpenAIScorer, createOpenAIScorer } from './clients/openai-scorer.ts';
+import { ResendMailer } from './clients/resend-mailer.ts';
 import { loadSettings } from './config.ts';
 import { pickWeek } from './core/picker.ts';
 import { createLogger, redactEmail } from './logger.ts';
@@ -72,11 +73,11 @@ async function showWeek(args: string[]): Promise<number> {
 async function runPicker(args: string[], opts: { dryRun: boolean }): Promise<number> {
   const dateArg = args.find((a) => !a.startsWith('--'));
 
-  // Resend keys aren't used here yet (failure email lands in a follow-up);
-  // stub them so .env doesn't need everything to run the picker.
+  // Stub anything missing so .env doesn't need to be fully populated to
+  // exercise the picker locally. Production cron has all secrets.
   const settings = loadSettings({
     ...process.env,
-    RESEND_API_KEY: process.env.RESEND_API_KEY || 'unused-for-now',
+    RESEND_API_KEY: process.env.RESEND_API_KEY || 'unconfigured',
     NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
     NOTIFY_FROM_EMAIL: process.env.NOTIFY_FROM_EMAIL || 'noreply@example.com',
   });
@@ -84,34 +85,62 @@ async function runPicker(args: string[], opts: { dryRun: boolean }): Promise<num
   logger.info(`account: ${redactEmail(settings.forkable.email)}`);
   logger.info(opts.dryRun ? 'mode: DRY-RUN (no swaps will be issued)' : 'mode: LIVE');
 
-  const client = new ForkableClient(settings.forkable, logger);
-  await client.login();
-  await client.me();
+  // Only construct a real mailer when RESEND_API_KEY was actually set.
+  const mailer = process.env.RESEND_API_KEY
+    ? new ResendMailer(
+        {
+          apiKey: settings.resend.apiKey,
+          from: settings.resend.notifyFrom,
+          to: settings.resend.notifyTo,
+        },
+        logger,
+      )
+    : null;
 
-  const from = dateArg ?? thisWeekMonday();
-  logger.info(`picker target week: ${from}`);
-  const days = await client.getWeek(from);
-  if (days.length === 0) {
-    logger.info('no deliveries for that week');
+  try {
+    const client = new ForkableClient(settings.forkable, logger);
+    await client.login();
+    await client.me();
+
+    const from = dateArg ?? thisWeekMonday();
+    logger.info(`picker target week: ${from}`);
+    const days = await client.getWeek(from);
+    if (days.length === 0) {
+      logger.info('no deliveries for that week');
+      return 0;
+    }
+
+    const scorer = createOpenAIScorer({ apiKey: settings.openaiApiKey }, logger);
+    const result = await pickWeek({
+      from,
+      days,
+      alternativesFor: (_deliveryId, menuIds, clubId) => client.getAlternatives(menuIds, clubId),
+      score: (cand) => scorer.score(cand),
+      swap: opts.dryRun
+        ? async () => {
+            /* dry-run: no real swap */
+          }
+        : (input) => client.swapMeal(input),
+      dryRun: opts.dryRun,
+    });
+
+    printWeekResult(result, opts.dryRun);
     return 0;
+  } catch (err) {
+    if (mailer) {
+      try {
+        await mailer.sendFailure({
+          mode: opts.dryRun ? 'dry-run' : 'pick',
+          error: err as Error,
+        });
+      } catch (mailErr) {
+        logger.error(`also failed to send failure email: ${(mailErr as Error).message}`);
+      }
+    } else {
+      logger.error('RESEND_API_KEY not configured — skipping failure email');
+    }
+    throw err;
   }
-
-  const scorer = createOpenAIScorer({ apiKey: settings.openaiApiKey }, logger);
-  const result = await pickWeek({
-    from,
-    days,
-    alternativesFor: (_deliveryId, menuIds, clubId) => client.getAlternatives(menuIds, clubId),
-    score: (cand) => scorer.score(cand),
-    swap: opts.dryRun
-      ? async () => {
-          /* dry-run: no real swap */
-        }
-      : (input) => client.swapMeal(input),
-    dryRun: opts.dryRun,
-  });
-
-  printWeekResult(result, opts.dryRun);
-  return 0;
 }
 
 function printWeekResult(result: WeekResult, dryRun: boolean): void {
