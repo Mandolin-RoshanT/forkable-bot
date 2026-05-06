@@ -35,48 +35,46 @@ afterEach(async () => {
 });
 
 describe('CsvRunLogWriter', () => {
-  test('creates the file with a header on first append', async () => {
-    const path = join(dir, 'history.csv');
+  test('writes a fresh file with header + rows', async () => {
+    const path = join(dir, '2026-05-11.csv');
     const writer = new CsvRunLogWriter(path, silentLogger);
 
-    await writer.append([sampleRow({ date: '2026-05-11' })]);
+    await writer.write([sampleRow({ date: '2026-05-11' })]);
 
     expect(existsSync(path)).toBe(true);
     const contents = await readFile(path, 'utf8');
     const lines = contents.trim().split('\n');
     expect(lines).toHaveLength(2);
     expect(lines[0]).toContain('runAt');
-    expect(lines[0]).toContain('summary');
     expect(lines[1]).toContain('2026-05-11');
   });
 
-  test('appends without re-emitting the header on subsequent calls', async () => {
-    const path = join(dir, 'history.csv');
+  test('overwrites previous contents on subsequent write', async () => {
+    const path = join(dir, '2026-05-11.csv');
     const writer = new CsvRunLogWriter(path, silentLogger);
 
-    await writer.append([sampleRow({ date: '2026-05-11' })]);
-    await writer.append([sampleRow({ date: '2026-05-12' }), sampleRow({ date: '2026-05-13' })]);
+    await writer.write([sampleRow({ date: '2026-05-11', summary: 'first' })]);
+    await writer.write([sampleRow({ date: '2026-05-12', summary: 'second' })]);
 
     const contents = await readFile(path, 'utf8');
+    expect(contents).not.toContain('first');
+    expect(contents).toContain('second');
+    // Still exactly one header.
     const headerCount = contents.split('\n').filter((l) => l.startsWith('runAt')).length;
     expect(headerCount).toBe(1);
-
-    expect(contents).toContain('2026-05-11');
-    expect(contents).toContain('2026-05-12');
-    expect(contents).toContain('2026-05-13');
   });
 
   test('creates parent directories as needed', async () => {
-    const path = join(dir, 'nested', 'subdir', 'history.csv');
+    const path = join(dir, 'nested', 'subdir', '2026-05-11.csv');
     const writer = new CsvRunLogWriter(path, silentLogger);
-    await writer.append([sampleRow()]);
+    await writer.write([sampleRow()]);
     expect(existsSync(path)).toBe(true);
   });
 
   test('no-ops on an empty rows array', async () => {
-    const path = join(dir, 'history.csv');
+    const path = join(dir, '2026-05-11.csv');
     const writer = new CsvRunLogWriter(path, silentLogger);
-    await writer.append([]);
+    await writer.write([]);
     expect(existsSync(path)).toBe(false);
   });
 });

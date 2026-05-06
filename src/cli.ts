@@ -14,7 +14,12 @@ import { createLogger, redactEmail } from './logger.ts';
 import { BUCKET_RANK, type Bucket, type DayResult, type Score, type WeekResult } from './models.ts';
 import type { Delivery, Item } from './schemas/forkable.ts';
 
-const RUN_LOG_PATH = 'runs/history.csv';
+// Each run writes a fresh per-week CSV at runs/<from>.csv. Re-running a
+// week (e.g. dry-run earlier in the week, then the cron) overwrites; old
+// weeks' files are left alone as standalone snapshots.
+function runLogPath(from: string): string {
+  return `runs/${from}.csv`;
+}
 
 export async function run(argv: string[]): Promise<number> {
   const cmd = argv[2];
@@ -120,9 +125,9 @@ async function runPicker(args: string[], opts: { dryRun: boolean }): Promise<num
     });
 
     if (!skipLog) {
-      const writer = new CsvRunLogWriter(RUN_LOG_PATH, logger);
+      const writer = new CsvRunLogWriter(runLogPath(from), logger);
       const rows = buildRows(new Date().toISOString(), opts.dryRun ? 'dry-run' : 'pick', result);
-      await writer.append(rows);
+      await writer.write(rows);
     }
 
     printWeekResult(result, opts.dryRun);
