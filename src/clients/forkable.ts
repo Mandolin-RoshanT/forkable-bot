@@ -91,16 +91,10 @@ export class ForkableClient {
       throw new ForkableAuthError('MFA is enabled — bot cannot proceed (PRD §7.1).');
     }
 
-    const newCookies = this.jar.diff(beforeLogin);
-    const sessionCookieName =
-      newCookies.find((n) => n.toLowerCase().includes('session')) ?? newCookies[0];
-    if (!sessionCookieName) {
-      throw new ForkableAuthError('createSession set no new cookies — auth flow broken');
-    }
-    const cookieValue = this.jar.get(sessionCookieName) ?? '';
+    const sessionCookie = this.extractSessionCookie(beforeLogin);
 
     this.logger.info(`createSession → ok (user ${session.user.id})`);
-    this.logger.info(`cookie attached: ${sessionCookieName}=${redactCookie(cookieValue)}`);
+    this.logger.info(`cookie attached: ${sessionCookie.name}=${redactCookie(sessionCookie.value)}`);
 
     this.loggedInUser = session.user;
     return session.user;
@@ -182,6 +176,20 @@ export class ForkableClient {
     if (!this.loggedInUser) {
       throw new ForkableAuthError(`must login() before calling ${method}()`);
     }
+  }
+
+  // Find the cookie that createSession added to the jar (the named one
+  // containing "session" if present, otherwise the first new cookie).
+  // Throws if createSession set no new cookies — that would mean the auth
+  // flow is broken upstream.
+  private extractSessionCookie(beforeLogin: Set<string>): { name: string; value: string } {
+    const newCookies = this.jar.diff(beforeLogin);
+    const name = newCookies.find((n) => n.toLowerCase().includes('session')) ?? newCookies[0];
+    if (!name) {
+      throw new ForkableAuthError('createSession set no new cookies — auth flow broken');
+    }
+    const value = this.jar.get(name) ?? '';
+    return { name, value };
   }
 
   // Anonymous POST → expected 401, seeds AWS ALB sticky-session cookies.

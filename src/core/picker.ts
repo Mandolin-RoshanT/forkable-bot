@@ -41,6 +41,8 @@ export type PickWeekArgs = {
   dryRun: boolean;
 };
 
+type CurrentPieceRef = { menuId: number; itemId: number; oldPieceId: string };
+
 export async function pickWeek(args: PickWeekArgs): Promise<WeekResult> {
   const results: DayResult[] = [];
   // Track venues we've committed to (swap target or kept default) so the
@@ -62,17 +64,30 @@ export async function pickWeek(args: PickWeekArgs): Promise<WeekResult> {
       result = { kind: 'failed', date, reason: (err as Error).message };
     }
 
-    if (result.kind === 'swapped') {
-      picksThisWeek.push({ venue: result.to.venue });
-    } else if (result.kind === 'kept-default') {
-      picksThisWeek.push({ venue: result.current.venue });
-    } else if (result.kind === 'no-default' && result.picked) {
-      picksThisWeek.push({ venue: result.picked.venue });
+    const venue = committedVenue(result);
+    if (venue) {
+      picksThisWeek.push({ venue });
     }
     results.push(result);
   }
 
   return { from: args.from, days: results };
+}
+
+// Which venue did we commit to on this day, if any? Feeds the next day's
+// tiebreak so the week prefers venue variety.
+function committedVenue(result: DayResult): string | null {
+  switch (result.kind) {
+    case 'swapped':
+      return result.to.venue;
+    case 'kept-default':
+      return result.current.venue;
+    case 'no-default':
+      return result.picked?.venue ?? null;
+    case 'skipped-locked':
+    case 'failed':
+      return null;
+  }
 }
 
 // ─── one day ───────────────────────────────────────────────────────────────
@@ -88,49 +103,22 @@ async function pickOneDay(
     return { kind: 'failed', date, reason: 'no club id on delivery' };
   }
 
-  const menus = await args.alternativesFor(day.id, day.availableMenuIds, day.club.id);
-  const allItems = flattenItems(menus);
-  if (allItems.length === 0) {
+  const scored = await scoreAlternatives(day, day.club.id, args);
+  if (scored.length === 0) {
     return { kind: 'failed', date, reason: 'no alternative items returned' };
   }
-
-  const scored = await Promise.all(
-    allItems.map(async ({ menuName, menuId, item }): Promise<TiebreakCandidate> => {
-      const score = await args.score(toCandidate(item));
-      return {
-        menuId,
-        itemId: item.id,
-        venue: menuName,
-        name: item.name,
-        price: item.price,
-        bucket: score.bucket,
-        reasoning: score.reasoning,
-      };
-    }),
-  );
 
   const currentRef = currentPieceRef(day);
   const currentCandidate = currentRef
     ? scored.find((c) => c.menuId === currentRef.menuId && c.itemId === currentRef.itemId)
     : undefined;
-
-  const bestBucket = scored.reduce<Bucket>(
-    (best, c) => (BUCKET_RANK[c.bucket] > BUCKET_RANK[best] ? c.bucket : best),
-    'red',
-  );
+  const bestBucket = findBestBucket(scored);
 
   // No current default — pick the best candidate outright.
   if (!currentCandidate) {
     const topBucket = scored.filter((c) => c.bucket === bestBucket);
     const winner = breakTie(topBucket, picksThisWeek);
-    if (currentRef && !args.dryRun) {
-      await args.swap({
-        deliveryId: day.id,
-        oldPieceId: currentRef.oldPieceId,
-        menuId: winner.menuId,
-        itemId: winner.itemId,
-      });
-    }
+    await runSwap(args, day, currentRef, winner);
     return {
       kind: 'no-default',
       date,
@@ -157,16 +145,7 @@ async function pickOneDay(
       !(c.menuId === currentCandidate.menuId && c.itemId === currentCandidate.itemId),
   );
   const winner = breakTie(candidates, picksThisWeek);
-
-  if (!args.dryRun && currentRef) {
-    await args.swap({
-      deliveryId: day.id,
-      oldPieceId: currentRef.oldPieceId,
-      menuId: winner.menuId,
-      itemId: winner.itemId,
-    });
-  }
-
+  await runSwap(args, day, currentRef, winner);
   return {
     kind: 'swapped',
     date,
@@ -177,11 +156,61 @@ async function pickOneDay(
   };
 }
 
-// ─── small helpers ─────────────────────────────────────────────────────────
-
-function currentPieceRef(
+// Fetch every alternative for the day and score each one. The result is a
+// flat list of candidates ready for bucket-filtering and tiebreaking.
+async function scoreAlternatives(
   day: Delivery,
-): { menuId: number; itemId: number; oldPieceId: string } | undefined {
+  clubId: number,
+  args: PickWeekArgs,
+): Promise<TiebreakCandidate[]> {
+  const menus = await args.alternativesFor(day.id, day.availableMenuIds, clubId);
+  const allItems = flattenItems(menus);
+  return Promise.all(
+    allItems.map(async ({ menuName, menuId, item }): Promise<TiebreakCandidate> => {
+      const score = await args.score(toCandidate(item));
+      return {
+        menuId,
+        itemId: item.id,
+        venue: menuName,
+        name: item.name,
+        price: item.price,
+        bucket: score.bucket,
+        reasoning: score.reasoning,
+      };
+    }),
+  );
+}
+
+// Highest-ranked bucket present in the candidate list (red < yellow < green).
+function findBestBucket(scored: TiebreakCandidate[]): Bucket {
+  return scored.reduce<Bucket>(
+    (best, c) => (BUCKET_RANK[c.bucket] > BUCKET_RANK[best] ? c.bucket : best),
+    'red',
+  );
+}
+
+// Issue the swap RPC, unless we're in dry-run or the day has no current
+// piece to swap from (currentRef is what carries the oldPieceId).
+async function runSwap(
+  args: PickWeekArgs,
+  day: Delivery,
+  currentRef: CurrentPieceRef | undefined,
+  winner: TiebreakCandidate,
+): Promise<void> {
+  if (args.dryRun || !currentRef) {
+    return;
+  }
+  await args.swap({
+    deliveryId: day.id,
+    oldPieceId: currentRef.oldPieceId,
+    menuId: winner.menuId,
+    itemId: winner.itemId,
+  });
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────
+
+function currentPieceRef(day: Delivery): CurrentPieceRef | undefined {
   const fpv = firstPieceWithVenue(day);
   if (!fpv) return undefined;
   return { menuId: fpv.piece.menuId, itemId: fpv.piece.itemId, oldPieceId: fpv.piece.id };

@@ -13,7 +13,7 @@ import { formatPrice } from '../lib/cli-format.ts';
 import { thisWeekMonday } from '../lib/dates.ts';
 import { assertNever } from '../lib/exhaustive.ts';
 import { redactEmail } from '../lib/redact.ts';
-import { createLogger } from '../logger.ts';
+import { type Logger, createLogger } from '../logger.ts';
 import type { DayResult, WeekResult } from '../models.ts';
 
 function runLogPath(from: string): string {
@@ -69,19 +69,27 @@ export async function runPicker(args: string[], opts: { dryRun: boolean }): Prom
     printWeekResult(result, opts.dryRun);
     return 0;
   } catch (err) {
-    if (mailer) {
-      try {
-        await mailer.sendFailure({
-          mode: opts.dryRun ? 'dry-run' : 'pick',
-          error: err as Error,
-        });
-      } catch (mailErr) {
-        logger.error(`also failed to send failure email: ${(mailErr as Error).message}`);
-      }
-    } else {
-      logger.error('RESEND_API_KEY not configured — skipping failure email');
-    }
+    await notifyFailure(err, opts.dryRun ? 'dry-run' : 'pick', mailer, logger);
     throw err;
+  }
+}
+
+// Best-effort failure notification — sends an email if Resend is configured,
+// logs and swallows on send error so the original cause still propagates.
+async function notifyFailure(
+  err: unknown,
+  mode: 'dry-run' | 'pick',
+  mailer: ResendMailer | null,
+  logger: Logger,
+): Promise<void> {
+  if (!mailer) {
+    logger.error('RESEND_API_KEY not configured — skipping failure email');
+    return;
+  }
+  try {
+    await mailer.sendFailure({ mode, error: err as Error });
+  } catch (mailErr) {
+    logger.error(`also failed to send failure email: ${(mailErr as Error).message}`);
   }
 }
 
