@@ -17,6 +17,7 @@
     "check": "bun run typecheck && bun run lint && bun test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.1",
     "openai": "^4.77.0",
     "zod": "^3.23.0"
   },

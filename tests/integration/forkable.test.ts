@@ -31,7 +31,7 @@ const CAPTURES = resolve(import.meta.dir, '../../scripts/captures');
 
 const baseSettings: Settings = {
   forkable: { email: 'test@example.com', password: 'pw' },
-  openaiApiKey: 'unused',
+  scorer: { provider: 'openai', apiKey: 'unused' },
   resend: { apiKey: 'unused', notifyTo: 'a@b.com', notifyFrom: 'b@c.com' },
   debug: false,
 };

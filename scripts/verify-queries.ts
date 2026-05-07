@@ -12,11 +12,12 @@ import { redactEmail } from '../src/lib/redact.ts';
 import { createLogger } from '../src/logger.ts';
 
 async function main(): Promise<void> {
-  // OpenAI/Resend keys aren't used by this script; stub them so we don't
+  // Scorer/Resend keys aren't used by this script; stub them so we don't
   // need them in .env to run a forkable-only check.
   const settings = loadSettings({
     ...process.env,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'unused-in-verify',
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || 'unused-in-verify',
     RESEND_API_KEY: process.env.RESEND_API_KEY || 'unused-in-verify',
     NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
   });
