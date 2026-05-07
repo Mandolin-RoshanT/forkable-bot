@@ -3,8 +3,13 @@
 .env.local
 .env.*.local
 
-# Captures (PII, real meal IDs, real cookies)
-scripts/captures/
+# Captures: ignore raw spike output, but keep the two sanitized fixtures
+# the test suite reads from (schema-drift tripwire). Keep PII out of any
+# new file you add here — see scripts/CAPTURE.md.
+scripts/captures/*
+scripts/captures/raw/
+!scripts/captures/get-week.json
+!scripts/captures/get-alternatives.json
 
 # Bun / Node
 node_modules/
