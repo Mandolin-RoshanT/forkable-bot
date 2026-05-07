@@ -32,12 +32,24 @@ const HEADER: readonly (keyof RunLogRow)[] = [
   'summary',
 ];
 
+// Default values for the variable-per-kind fields. Each `buildRow` case
+// spreads these and overrides only what's relevant, so the per-kind diff
+// is what jumps out instead of a wall of empty strings.
+const EMPTY_FIELDS = {
+  fromVenue: '',
+  fromMeal: '',
+  toVenue: '',
+  toMeal: '',
+  bucket: '',
+  summary: '',
+} as const;
+
 export function buildRows(runAt: string, mode: RunMode, week: WeekResult): RunLogRow[] {
   return week.days.map((d) => buildRow(runAt, mode, d));
 }
 
 function buildRow(runAt: string, mode: RunMode, day: DayResult): RunLogRow {
-  const base = { runAt, mode, date: day.date };
+  const base = { runAt, mode, date: day.date, ...EMPTY_FIELDS };
   switch (day.kind) {
     case 'swapped':
       return {
@@ -56,8 +68,6 @@ function buildRow(runAt: string, mode: RunMode, day: DayResult): RunLogRow {
         kind: 'KEEP',
         fromVenue: day.current.venue,
         fromMeal: day.current.name,
-        toVenue: '',
-        toMeal: '',
         bucket: day.bucket,
         summary: day.reason,
       };
@@ -65,35 +75,14 @@ function buildRow(runAt: string, mode: RunMode, day: DayResult): RunLogRow {
       return {
         ...base,
         kind: 'NO-DEFAULT',
-        fromVenue: '',
-        fromMeal: '',
         toVenue: day.picked?.venue ?? '',
         toMeal: day.picked?.name ?? '',
-        bucket: '',
         summary: day.reason,
       };
     case 'skipped-locked':
-      return {
-        ...base,
-        kind: 'LOCKED',
-        fromVenue: '',
-        fromMeal: '',
-        toVenue: '',
-        toMeal: '',
-        bucket: '',
-        summary: '',
-      };
+      return { ...base, kind: 'LOCKED' };
     case 'failed':
-      return {
-        ...base,
-        kind: 'FAILED',
-        fromVenue: '',
-        fromMeal: '',
-        toVenue: '',
-        toMeal: '',
-        bucket: '',
-        summary: day.reason,
-      };
+      return { ...base, kind: 'FAILED', summary: day.reason };
     default:
       return assertNever(day);
   }

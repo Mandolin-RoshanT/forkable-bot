@@ -20,30 +20,25 @@ export function breakTie(
   candidates: TiebreakCandidate[],
   picksThisWeek: { venue: string }[],
 ): TiebreakCandidate {
-  if (candidates.length === 0) {
-    throw new Error('breakTie: candidates must be non-empty');
-  }
   const venuesUsed = new Set(picksThisWeek.map((p) => p.venue));
 
-  // Stable sort by (priceAsc, freshVenueDesc).
-  const ranked = candidates
-    .map((c, idx) => ({ c, idx }))
-    .sort((a, b) => {
-      const priceDiff =
-        (a.c.price ?? Number.POSITIVE_INFINITY) - (b.c.price ?? Number.POSITIVE_INFINITY);
-      if (priceDiff !== 0) return priceDiff;
+  // Sort a copy by (priceAsc, freshVenueDesc). Array.prototype.sort is
+  // stable since ES2019, so equal entries keep their input order — the
+  // implicit third tiebreaker.
+  const [winner] = [...candidates].sort((a, b) => {
+    const priceDiff = (a.price ?? Number.POSITIVE_INFINITY) - (b.price ?? Number.POSITIVE_INFINITY);
+    if (priceDiff !== 0) return priceDiff;
 
-      const aFresh = !venuesUsed.has(a.c.venue);
-      const bFresh = !venuesUsed.has(b.c.venue);
-      if (aFresh && !bFresh) return -1;
-      if (!aFresh && bFresh) return 1;
+    const aFresh = !venuesUsed.has(a.venue);
+    const bFresh = !venuesUsed.has(b.venue);
+    if (aFresh && !bFresh) return -1;
+    if (!aFresh && bFresh) return 1;
 
-      return a.idx - b.idx;
-    });
+    return 0;
+  });
 
-  const winner = ranked[0];
   if (!winner) {
-    throw new Error('breakTie: ranked array is empty (unreachable)');
+    throw new Error('breakTie: candidates must be non-empty');
   }
-  return winner.c;
+  return winner;
 }
