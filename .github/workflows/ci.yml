@@ -1,0 +1,31 @@
+name: CI
+
+# Fires on every push to any branch — including main post-merge — so PRs
+# show a status check before review and main gets re-verified after merge.
+on:
+  push:
+
+# Cancel in-progress CI when a newer commit lands on the same branch —
+# stale runs aren't useful, just expensive.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3'
+
+      - run: bun install --frozen-lockfile
+
+      - name: Typecheck + lint + tests
+        run: bun run check
