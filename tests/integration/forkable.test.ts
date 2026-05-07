@@ -50,7 +50,7 @@ describe('ForkableClient — happy paths', () => {
 
     const client = new ForkableClient(baseSettings.forkable, silentLogger);
     const user = await client.login();
-    expect(user.id).toBe(305827);
+    expect(user.id).toBe(100001);
     expect(user.email).toBe('test@example.com');
     expect(user.mfaEnabled).toBe(false);
   });
@@ -66,7 +66,7 @@ describe('ForkableClient — happy paths', () => {
     const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
     const me = await client.me();
-    expect(me.id).toBe(305827);
+    expect(me.id).toBe(100001);
   });
 
   test('getWeek() parses a real captured response', async () => {
