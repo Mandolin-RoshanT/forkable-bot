@@ -17,6 +17,12 @@ const MODEL = 'gpt-4o-mini';
 
 export type ChatCompleter = (input: { system: string; user: string }) => Promise<string>;
 
+// Failure sentinel — every scoring error path returns one of these so the
+// picker still has something to bucket-rank for the day.
+function redScore(reasoning: string): Score {
+  return { bucket: 'red', reasoning };
+}
+
 export class OpenAIScorer {
   private rubric: string | null = null;
 
@@ -35,7 +41,7 @@ export class OpenAIScorer {
     } catch (err) {
       const msg = (err as Error).message;
       this.logger.error(`scoring "${candidate.name}" failed: ${msg}`);
-      return { bucket: 'red', reasoning: `OpenAI error: ${msg}` };
+      return redScore(`OpenAI error: ${msg}`);
     }
 
     let json: unknown;
@@ -43,13 +49,13 @@ export class OpenAIScorer {
       json = JSON.parse(raw);
     } catch {
       this.logger.error(`scoring "${candidate.name}" returned invalid JSON: ${raw.slice(0, 200)}`);
-      return { bucket: 'red', reasoning: 'parse failed: invalid JSON' };
+      return redScore('parse failed: invalid JSON');
     }
 
     const parsed = ScoreSchema.safeParse(json);
     if (!parsed.success) {
       this.logger.error(`scoring "${candidate.name}" failed schema check: ${parsed.error.message}`);
-      return { bucket: 'red', reasoning: `parse failed: ${parsed.error.message}` };
+      return redScore(`parse failed: ${parsed.error.message}`);
     }
     return parsed.data;
   }
