@@ -19,7 +19,7 @@ export const silentLogger: Logger = {
   debug: () => {},
 };
 
-export const VALID_USER = { id: 305827, email: 'test@example.com', mfaEnabled: false };
+export const VALID_USER = { id: 100001, email: 'test@example.com', mfaEnabled: false };
 
 export const SESSION_COOKIE_HEADERS = {
   'Set-Cookie': '_easyorder_session=session-cookie-aaa; Path=/; HttpOnly',
