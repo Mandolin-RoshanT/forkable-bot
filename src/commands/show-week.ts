@@ -64,20 +64,15 @@ function printLockedDay(day: Delivery): void {
   console.log(`${dayLabel(day)}  LOCKED`);
 }
 
+type ScoredItem = FlatItem & { score: Score };
+
 async function printEditableDay(
   day: Delivery,
   client: ForkableClient,
   scorer: OpenAIScorer | null,
 ): Promise<void> {
   console.log(`${dayLabel(day)}  EDITABLE`);
-
-  const fpv = firstPieceWithVenue(day);
-  if (fpv) {
-    const venue = fpv.venueName ?? '(unknown venue)';
-    console.log(`  current: ${venue} — ${fpv.piece.name} (${formatPrice(fpv.piece.price)})`);
-  } else {
-    console.log('  current: (none)');
-  }
+  printCurrent(day);
 
   if (!day.club) {
     console.log('  alternatives: (no club id — cannot fetch)');
@@ -88,27 +83,47 @@ async function printEditableDay(
   const allItems = flattenItems(menus);
 
   if (scorer === null) {
-    console.log(`  alternatives (${allItems.length}, unscored — pass an OPENAI_API_KEY to score):`);
-    for (const { menuName, item } of allItems) {
-      console.log(
-        `             ${truncate(menuName, 22).padEnd(22)}  ${truncate(item.name, 32).padEnd(32)}  ${formatPrice(item.price)}`,
-      );
-    }
+    printUnscoredAlternatives(allItems);
     return;
   }
 
-  type Candidate = FlatItem & { score: Score };
-  const scored: Candidate[] = await Promise.all(
-    allItems.map(async (fi) => ({ ...fi, score: await scorer.score(toCandidate(fi.item)) })),
-  );
+  const scored = await scoreAndSort(allItems, scorer);
+  printScoredAlternatives(scored);
+}
 
+function printCurrent(day: Delivery): void {
+  const fpv = firstPieceWithVenue(day);
+  if (!fpv) {
+    console.log('  current: (none)');
+    return;
+  }
+  const venue = fpv.venueName ?? '(unknown venue)';
+  console.log(`  current: ${venue} — ${fpv.piece.name} (${formatPrice(fpv.piece.price)})`);
+}
+
+function printUnscoredAlternatives(items: FlatItem[]): void {
+  console.log(`  alternatives (${items.length}, unscored — pass an OPENAI_API_KEY to score):`);
+  for (const { menuName, item } of items) {
+    console.log(
+      `             ${truncate(menuName, 22).padEnd(22)}  ${truncate(item.name, 32).padEnd(32)}  ${formatPrice(item.price)}`,
+    );
+  }
+}
+
+async function scoreAndSort(items: FlatItem[], scorer: OpenAIScorer): Promise<ScoredItem[]> {
+  const scored: ScoredItem[] = await Promise.all(
+    items.map(async (fi) => ({ ...fi, score: await scorer.score(toCandidate(fi.item)) })),
+  );
   // Sort green → yellow → red, then by price asc within bucket.
   scored.sort((a, b) => {
     const r = BUCKET_RANK[b.score.bucket] - BUCKET_RANK[a.score.bucket];
     if (r !== 0) return r;
     return (a.item.price ?? 0) - (b.item.price ?? 0);
   });
+  return scored;
+}
 
+function printScoredAlternatives(scored: ScoredItem[]): void {
   console.log(`  alternatives (${scored.length}, scored):`);
   for (const c of scored) {
     console.log(
