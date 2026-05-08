@@ -1,8 +1,7 @@
 // Per-run history rows. Pure: builds rows from a WeekResult and serializes
 // them to RFC-4180-style CSV. The actual file IO is in the writer (boundary).
 
-import { assertNever } from '../lib/exhaustive.ts';
-import type { DayResult, WeekResult } from '../models.ts';
+import { type DayResult, type WeekResult, assertNever } from '../models.ts';
 
 export type RunMode = 'dry-run' | 'pick';
 

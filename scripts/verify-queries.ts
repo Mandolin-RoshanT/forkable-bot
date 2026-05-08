@@ -7,8 +7,7 @@
 
 import { ForkableClient } from '../src/clients/forkable.ts';
 import { loadSettings } from '../src/config.ts';
-import { thisWeekMonday } from '../src/lib/dates.ts';
-import { redactEmail } from '../src/lib/redact.ts';
+import { redactEmail, thisWeekMonday } from '../src/format.ts';
 import { createLogger } from '../src/logger.ts';
 
 async function main(): Promise<void> {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { thisWeekMonday } from '../../src/lib/dates.ts';
+import { thisWeekMonday } from '../../src/format.ts';
 
 describe('thisWeekMonday', () => {
   test('a Monday returns itself', () => {

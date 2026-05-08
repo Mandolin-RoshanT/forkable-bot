@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { redactCookie, redactEmail } from '../../src/lib/redact.ts';
+import { redactCookie, redactEmail } from '../../src/format.ts';
 
 describe('redactCookie', () => {
   test('keeps length + first 4 chars', () => {

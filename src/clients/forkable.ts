@@ -5,9 +5,7 @@
 // matching Zod schema — schema drift surfaces as a typed error here, not as
 // a silent `undefined` deeper in the picker.
 
-import { BROWSER_HEADERS, FORKABLE_GRAPHQL } from '../lib/constants.ts';
-import { CookieJar } from '../lib/cookie-jar.ts';
-import { redactCookie } from '../lib/redact.ts';
+import { redactCookie } from '../format.ts';
 import type { Logger } from '../logger.ts';
 import {
   CREATE_SESSION_MUTATION,
@@ -29,12 +27,29 @@ import {
   type Menu,
   ReplacePieceResponseSchema,
 } from '../schemas/forkable.ts';
+import { CookieJar } from './cookie-jar.ts';
 import {
   ForkableAuthError,
   ForkableError,
   ForkableNetworkError,
   ForkableSchemaError,
 } from './forkable-errors.ts';
+
+// Forkable's only HTTP surface — every operation is GraphQL over POST.
+// Exported so the spike scripts under scripts/ can hit the same endpoint
+// with the same headers, instead of duplicating them.
+export const FORKABLE_GRAPHQL = 'https://forkable.com/api/v2/graphql';
+
+// Origin/Referer satisfy CSRF; Forkable-Referrer is required by the server.
+export const BROWSER_HEADERS: Record<string, string> = {
+  'Content-Type': 'application/json',
+  Accept: 'application/json',
+  Origin: 'https://forkable.com',
+  Referer: 'https://forkable.com/mc/',
+  'Forkable-Referrer': 'mc',
+  'User-Agent':
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+};
 
 export type ForkableCreds = { email: string; password: string };
 
