@@ -25,10 +25,14 @@ In your fork: **Settings → Secrets and variables → Actions → New repositor
 |---|---|---|
 | ✅ | `FORKABLE_EMAIL` | Your forkable.com login email |
 | ✅ | `FORKABLE_PASSWORD` | Your forkable.com password (MFA must be off; see below) |
-| ✅ | `OPENAI_API_KEY` | An OpenAI API key — get one at [platform.openai.com](https://platform.openai.com/api-keys). Each run costs ~$0.001. |
+| ✅* | `OPENAI_API_KEY` | An OpenAI API key — get one at [platform.openai.com](https://platform.openai.com/api-keys). Each run costs ~$0.001. Required when `SCORER_PROVIDER=openai` (the default). |
+| ✅* | `ANTHROPIC_API_KEY` | An Anthropic API key — get one at [console.anthropic.com](https://console.anthropic.com/). Required when `SCORER_PROVIDER=anthropic`. |
+| optional | `SCORER_PROVIDER` | Which LLM scores meals — `openai` (default) or `anthropic`. Set the matching API-key secret above. |
 | ✅ | `RESEND_API_KEY` | A Resend API key for failure emails — get one at [resend.com](https://resend.com). Free tier (100 emails/month) is plenty. |
 | ✅ | `NOTIFY_TO_EMAIL` | Where failure emails should land — usually your inbox |
 | optional | `NOTIFY_FROM_EMAIL` | The "From:" address. Defaults to `onboarding@resend.dev` (Resend's universally-verified sender). Only set this if you've verified a custom domain in Resend. |
+
+\* You only need the API key for the provider you've selected.
 
 ### 4. Verify with a manual dispatch
 

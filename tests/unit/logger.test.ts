@@ -5,7 +5,7 @@ import { createLogger } from '../../src/logger.ts';
 
 const baseSettings: Settings = {
   forkable: { email: 'r@example.com', password: 'super-secret-pw' },
-  openaiApiKey: 'sk-openai-key-12345',
+  scorer: { provider: 'openai', apiKey: 'sk-openai-key-12345' },
   resend: {
     apiKey: 're_resend_key_67890',
     notifyTo: 'r@example.com',

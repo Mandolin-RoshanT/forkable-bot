@@ -3,9 +3,9 @@
 // level catch fans out to the failure-email mailer.
 
 import { ForkableClient } from '../clients/forkable.ts';
-import { createOpenAIScorer } from '../clients/openai-scorer.ts';
 import { ResendMailer } from '../clients/resend-mailer.ts';
 import { CsvRunLogWriter } from '../clients/run-log-writer.ts';
+import { createScorer } from '../clients/scorer.ts';
 import { loadSettings } from '../config.ts';
 import { pickWeek } from '../core/picker.ts';
 import { buildRows } from '../core/run-log.ts';
@@ -50,7 +50,7 @@ export async function runPicker(args: string[], opts: { dryRun: boolean }): Prom
       return 0;
     }
 
-    const scorer = createOpenAIScorer({ apiKey: settings.openaiApiKey }, logger);
+    const scorer = createScorer(settings.scorer, logger);
     const result = await pickWeek({
       from,
       days,

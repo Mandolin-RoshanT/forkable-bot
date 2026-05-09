@@ -1,19 +1,21 @@
-// OpenAIScorer: maps a MealCandidate → Score via gpt-4o-mini.
+// LLMScorer: maps a MealCandidate → Score via any provider that satisfies
+// the ChatCompleter capability. The class is provider-agnostic — pick a
+// provider via createScorer(settings.scorer, logger).
 //
-// The class is a pure function over a `ChatCompleter` capability — production
-// uses createOpenAIScorer() to wire up the real OpenAI SDK; tests inject a
-// fake completer and assert behavior without touching the network.
+// Production wires up either OpenAI or Anthropic via the matching adapter
+// in this directory; tests inject a fake completer and assert behavior
+// without touching the network.
 
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import OpenAI from 'openai';
 
+import type { Settings } from '../config.ts';
 import type { Logger } from '../logger.ts';
 import { type MealCandidate, type Score, ScoreSchema } from '../models.ts';
+import { createAnthropicChatCompleter } from './anthropic-completer.ts';
+import { createOpenAIChatCompleter } from './openai-completer.ts';
 
 const RUBRIC_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'rubric.md');
-
-const MODEL = 'gpt-4o-mini';
 
 export type ChatCompleter = (input: { system: string; user: string }) => Promise<string>;
 
@@ -23,7 +25,7 @@ function redScore(reasoning: string): Score {
   return { bucket: 'red', reasoning };
 }
 
-export class OpenAIScorer {
+export class LLMScorer {
   private rubric: string | null = null;
 
   constructor(
@@ -41,7 +43,7 @@ export class OpenAIScorer {
     } catch (err) {
       const msg = (err as Error).message;
       this.logger.error(`scoring "${candidate.name}" failed: ${msg}`);
-      return redScore(`OpenAI error: ${msg}`);
+      return redScore(`scorer error: ${msg}`);
     }
 
     let json: unknown;
@@ -68,21 +70,13 @@ export class OpenAIScorer {
   }
 }
 
-// Production factory — wires up the real OpenAI SDK behind ChatCompleter.
-export function createOpenAIScorer(creds: { apiKey: string }, logger: Logger): OpenAIScorer {
-  const client = new OpenAI({ apiKey: creds.apiKey });
-
-  const chat: ChatCompleter = async ({ system, user }) => {
-    const completion = await client.chat.completions.create({
-      model: MODEL,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-    });
-    return completion.choices[0]?.message?.content ?? '';
-  };
-
-  return new OpenAIScorer(chat, logger);
+// Top-level factory — picks the right ChatCompleter based on the
+// configured provider and wraps it in an LLMScorer.
+export function createScorer(config: Settings['scorer'], logger: Logger): LLMScorer {
+  switch (config.provider) {
+    case 'openai':
+      return new LLMScorer(createOpenAIChatCompleter({ apiKey: config.apiKey }), logger);
+    case 'anthropic':
+      return new LLMScorer(createAnthropicChatCompleter({ apiKey: config.apiKey }), logger);
+  }
 }

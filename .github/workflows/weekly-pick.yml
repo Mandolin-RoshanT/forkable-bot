@@ -31,7 +31,11 @@ jobs:
     env:
       FORKABLE_EMAIL: ${{ secrets.FORKABLE_EMAIL }}
       FORKABLE_PASSWORD: ${{ secrets.FORKABLE_PASSWORD }}
+      # Scorer provider — defaults to openai when SCORER_PROVIDER is unset
+      # or empty. Only the matching API key below is consulted.
+      SCORER_PROVIDER: ${{ secrets.SCORER_PROVIDER }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       NOTIFY_TO_EMAIL: ${{ secrets.NOTIFY_TO_EMAIL }}
       # NOTIFY_FROM_EMAIL omitted — defaults to onboarding@resend.dev in

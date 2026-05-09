@@ -12,22 +12,48 @@ const VALID_ENV = {
 };
 
 describe('loadSettings', () => {
-  test('parses a valid environment', () => {
+  test('parses a valid environment with default OpenAI provider', () => {
     const settings = loadSettings(VALID_ENV);
     expect(settings.forkable.email).toBe('roshan@mandolin.com');
     expect(settings.forkable.password).toBe('hunter2');
-    expect(settings.openaiApiKey).toBe('sk-xxx');
+    expect(settings.scorer.provider).toBe('openai');
+    expect(settings.scorer.apiKey).toBe('sk-xxx');
     expect(settings.resend.notifyTo).toBe('roshan@mandolin.com');
     expect(settings.debug).toBe(false);
+  });
+
+  test("SCORER_PROVIDER='' (empty string) falls back to OpenAI", () => {
+    const settings = loadSettings({ ...VALID_ENV, SCORER_PROVIDER: '' });
+    expect(settings.scorer.provider).toBe('openai');
+  });
+
+  test('SCORER_PROVIDER=anthropic uses ANTHROPIC_API_KEY', () => {
+    const settings = loadSettings({
+      ...VALID_ENV,
+      SCORER_PROVIDER: 'anthropic',
+      ANTHROPIC_API_KEY: 'sk-ant-zzz',
+    });
+    expect(settings.scorer.provider).toBe('anthropic');
+    expect(settings.scorer.apiKey).toBe('sk-ant-zzz');
   });
 
   test('DEBUG=1 enables debug mode', () => {
     expect(loadSettings({ ...VALID_ENV, DEBUG: '1' }).debug).toBe(true);
   });
 
-  test('throws with a clear message when a required field is missing', () => {
+  test('throws when the OpenAI key is missing', () => {
     const { OPENAI_API_KEY: _, ...withoutOpenAI } = VALID_ENV;
-    expect(() => loadSettings(withoutOpenAI)).toThrow(/openaiApiKey/);
+    expect(() => loadSettings(withoutOpenAI)).toThrow(/scorer\.apiKey/);
+  });
+
+  test('throws when SCORER_PROVIDER=anthropic but ANTHROPIC_API_KEY is missing', () => {
+    expect(() => loadSettings({ ...VALID_ENV, SCORER_PROVIDER: 'anthropic' })).toThrow(
+      /scorer\.apiKey/,
+    );
+  });
+
+  test('throws on an unknown SCORER_PROVIDER value', () => {
+    expect(() => loadSettings({ ...VALID_ENV, SCORER_PROVIDER: 'cohere' })).toThrow(/scorer/);
   });
 
   test('rejects an invalid email format', () => {

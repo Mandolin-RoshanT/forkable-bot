@@ -3,7 +3,7 @@
 // No swaps, no CSV writes, no email.
 
 import { ForkableClient } from '../clients/forkable.ts';
-import { type OpenAIScorer, createOpenAIScorer } from '../clients/openai-scorer.ts';
+import { type LLMScorer, createScorer } from '../clients/scorer.ts';
 import { loadSettings } from '../config.ts';
 import { bucketLabel, dayLabel, formatPrice, truncate } from '../lib/cli-format.ts';
 import { thisWeekMonday } from '../lib/dates.ts';
@@ -18,12 +18,14 @@ export async function showWeek(args: string[]): Promise<number> {
   const noScore = args.includes('--no-score');
   const dateArg = args.find((a) => !a.startsWith('--'));
 
-  // Resend keys aren't used here. OpenAI is also unused if --no-score, in
-  // which case we stub the key so .env doesn't need to be fully populated
-  // for a read-only flow.
+  // Resend keys aren't used here. The scorer is also unused if --no-score,
+  // in which case we stub whichever provider's key so .env doesn't need to
+  // be fully populated for a read-only flow.
+  const stubScorerKey = noScore ? 'unused-by-no-score' : undefined;
   const settings = loadSettings({
     ...process.env,
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY || (noScore ? 'unused-by-no-score' : undefined),
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || stubScorerKey,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || stubScorerKey,
     RESEND_API_KEY: process.env.RESEND_API_KEY || 'unused-by-show-week',
     NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
   });
@@ -42,7 +44,7 @@ export async function showWeek(args: string[]): Promise<number> {
     return 0;
   }
 
-  const scorer = noScore ? null : createOpenAIScorer({ apiKey: settings.openaiApiKey }, logger);
+  const scorer = noScore ? null : createScorer(settings.scorer, logger);
   printHeader(from);
   for (const day of days) {
     if (day.isReadOnly) {
@@ -69,7 +71,7 @@ type ScoredItem = FlatItem & { score: Score };
 async function printEditableDay(
   day: Delivery,
   client: ForkableClient,
-  scorer: OpenAIScorer | null,
+  scorer: LLMScorer | null,
 ): Promise<void> {
   console.log(`${dayLabel(day)}  EDITABLE`);
   printCurrent(day);
@@ -110,7 +112,7 @@ function printUnscoredAlternatives(items: FlatItem[]): void {
   }
 }
 
-async function scoreAndSort(items: FlatItem[], scorer: OpenAIScorer): Promise<ScoredItem[]> {
+async function scoreAndSort(items: FlatItem[], scorer: LLMScorer): Promise<ScoredItem[]> {
   const scored: ScoredItem[] = await Promise.all(
     items.map(async (fi) => ({ ...fi, score: await scorer.score(toCandidate(fi.item)) })),
   );

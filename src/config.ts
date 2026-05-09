@@ -3,12 +3,19 @@
 
 import { z } from 'zod';
 
+// Discriminated union — exactly one provider config is active per run, and
+// Zod requires the matching apiKey for whichever provider was chosen.
+const ScorerConfigSchema = z.discriminatedUnion('provider', [
+  z.object({ provider: z.literal('openai'), apiKey: z.string().min(1) }),
+  z.object({ provider: z.literal('anthropic'), apiKey: z.string().min(1) }),
+]);
+
 const SettingsSchema = z.object({
   forkable: z.object({
     email: z.string().email(),
     password: z.string().min(1),
   }),
-  openaiApiKey: z.string().min(1),
+  scorer: ScorerConfigSchema,
   resend: z.object({
     apiKey: z.string().min(1),
     notifyTo: z.string().email(),
@@ -22,12 +29,18 @@ const SettingsSchema = z.object({
 export type Settings = z.infer<typeof SettingsSchema>;
 
 export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
+  // Default to OpenAI for backward compatibility — existing deploys
+  // without SCORER_PROVIDER set keep working unchanged. `||` handles
+  // the empty-string case too (CI commonly passes "" for unset vars).
+  const provider = env.SCORER_PROVIDER || 'openai';
+  const apiKey = provider === 'anthropic' ? env.ANTHROPIC_API_KEY : env.OPENAI_API_KEY;
+
   const result = SettingsSchema.safeParse({
     forkable: {
       email: env.FORKABLE_EMAIL,
       password: env.FORKABLE_PASSWORD,
     },
-    openaiApiKey: env.OPENAI_API_KEY,
+    scorer: { provider, apiKey },
     resend: {
       apiKey: env.RESEND_API_KEY,
       notifyTo: env.NOTIFY_TO_EMAIL,

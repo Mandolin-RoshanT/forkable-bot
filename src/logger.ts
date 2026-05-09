@@ -15,7 +15,7 @@ const PREFIX = '[forkable-bot]';
 export function createLogger(settings: Settings): Logger {
   const secrets = [
     settings.forkable.password,
-    settings.openaiApiKey,
+    settings.scorer.apiKey,
     settings.resend.apiKey,
   ].filter((s) => s.length >= 4);
 
