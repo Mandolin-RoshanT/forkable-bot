@@ -331,6 +331,25 @@ describe('ForkableClient — transport errors', () => {
     expect(err.status).toBe(500);
   });
 
+  test('throws a schema-kind ForkableError when zod parse fails (schema drift)', async () => {
+    server.use(
+      graphqlHandler({
+        CreateSession: createSessionOk,
+        // Valid JSON, valid HTTP, but missing the required `myDeliveries` field.
+        GetWeek: () => HttpResponse.json({ data: { somethingElse: [] } }),
+      }),
+    );
+
+    const client = new ForkableClient(baseSettings.forkable, silentLogger);
+    await client.login();
+    const err = (await client.getWeek('2026-05-04').catch((e) => e)) as ForkableError;
+    expect(err).toBeInstanceOf(ForkableError);
+    expect(err.kind).toBe('schema');
+    expect(err.context.operation).toBe('GetWeek');
+    expect(err.cause).toBeDefined();
+    expect((err.cause as Error).name).toBe('ZodError');
+  });
+
   test('throws a graphql-kind ForkableError on GraphQL-level errors in response', async () => {
     server.use(
       graphqlHandler({

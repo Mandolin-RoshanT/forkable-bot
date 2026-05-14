@@ -3,8 +3,10 @@
 // easy to mock in tests.
 
 import type { Settings } from '../config.ts';
+import { errorMessage } from '../lib/error-message.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import type { Logger } from '../logger.ts';
+import { ResendError } from './resend-errors.ts';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 
@@ -40,12 +42,13 @@ export class ResendMailer {
   ) {}
 
   // Friday's failure email — short, actionable, no HTML.
-  async sendFailure(args: { mode: 'dry-run' | 'pick'; error: Error }): Promise<void> {
-    const subject = `Forkable bot failed during ${args.mode}: ${args.error.name}`;
+  async sendFailure(args: { mode: 'dry-run' | 'pick'; error: unknown }): Promise<void> {
+    const errName = args.error instanceof Error ? args.error.name : 'Error';
+    const subject = `Forkable bot failed during ${args.mode}: ${errName}`;
     const lines = [
       `The Forkable picker failed during a "${args.mode}" run.`,
       '',
-      `Error: ${args.error.name}: ${args.error.message}`,
+      `Error: ${errName}: ${errorMessage(args.error)}`,
       '',
       'Check the GitHub Actions run for full logs.',
     ];
@@ -68,7 +71,12 @@ export class ResendMailer {
     });
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`Resend send failed: HTTP ${res.status}: ${body.slice(0, 500)}`);
+      throw new ResendError({
+        message: `Resend send failed: HTTP ${res.status}`,
+        status: res.status,
+        body: body.slice(0, 500),
+        context: { operation: 'sendFailure', url: RESEND_ENDPOINT, subject },
+      });
     }
     this.logger.info(LOG_EVENTS.MAILER_EMAIL_SENT, { subject });
   }

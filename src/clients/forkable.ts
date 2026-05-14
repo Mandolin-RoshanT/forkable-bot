@@ -5,6 +5,8 @@
 // matching Zod schema — schema drift surfaces as a typed error here, not as
 // a silent `undefined` deeper in the picker.
 
+import type { z } from 'zod';
+
 import { BROWSER_HEADERS, FORKABLE_GRAPHQL } from '../lib/constants.ts';
 import { CookieJar } from '../lib/cookie-jar.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
@@ -73,7 +75,7 @@ export class ForkableClient {
       'CreateSession',
     );
 
-    const parsed = CreateSessionResponseSchema.parse(raw);
+    const parsed = this.parseOrThrow(CreateSessionResponseSchema, raw, 'CreateSession');
     const session = parsed.createSession;
 
     if (!session.user) {
@@ -110,7 +112,7 @@ export class ForkableClient {
   async me(): Promise<ForkableUser> {
     this.requireLogin('me');
     const raw = await this.post({ operationName: 'Me', query: ME_QUERY }, 'Me');
-    const parsed = MeResponseSchema.parse(raw);
+    const parsed = this.parseOrThrow(MeResponseSchema, raw, 'Me');
     if (!parsed.me) {
       throw new ForkableError({
         kind: 'auth',
@@ -131,7 +133,7 @@ export class ForkableClient {
       { operationName: 'GetWeek', query: GET_WEEK_QUERY, variables },
       'GetWeek',
     );
-    const parsed = GetWeekResponseSchema.parse(raw);
+    const parsed = this.parseOrThrow(GetWeekResponseSchema, raw, 'GetWeek');
     return parsed.myDeliveries;
   }
 
@@ -142,7 +144,7 @@ export class ForkableClient {
       { operationName: 'GetAlternatives', query: GET_ALTERNATIVES_QUERY, variables },
       'GetAlternatives',
     );
-    const parsed = GetAlternativesResponseSchema.parse(raw);
+    const parsed = this.parseOrThrow(GetAlternativesResponseSchema, raw, 'GetAlternatives');
     return parsed.menus;
   }
 
@@ -175,7 +177,7 @@ export class ForkableClient {
       'ReplacePiece',
     );
     // Validate the shape; we don't need the value.
-    ReplacePieceResponseSchema.parse(raw);
+    this.parseOrThrow(ReplacePieceResponseSchema, raw, 'ReplacePiece');
     this.logger.info(LOG_EVENTS.FORKABLE_REPLACE_OK, {
       delivery: args.deliveryId,
       menu: args.menuId,
@@ -211,6 +213,24 @@ export class ForkableClient {
     }
     const value = this.jar.get(name) ?? '';
     return { name, value };
+  }
+
+  // Run a zod schema against an upstream response and wrap any ZodError as
+  // a schema-kind ForkableError carrying the operation name and the raw
+  // payload. Preserves the ZodError as `cause` so the path info is intact
+  // for the schema-drift recovery flow.
+  private parseOrThrow<T>(schema: z.ZodType<T>, raw: unknown, operation: string): T {
+    try {
+      return schema.parse(raw);
+    } catch (err) {
+      throw new ForkableError({
+        kind: 'schema',
+        message: `${operation}: response did not match schema`,
+        body: raw,
+        context: { operation },
+        cause: err,
+      });
+    }
   }
 
   // Anonymous POST → expected 401, seeds AWS ALB sticky-session cookies.

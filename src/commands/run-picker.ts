@@ -89,7 +89,7 @@ async function notifyFailure(
     return;
   }
   try {
-    await mailer.sendFailure({ mode, error: err as Error });
+    await mailer.sendFailure({ mode, error: err });
   } catch (mailErr) {
     logger.error(LOG_EVENTS.RUN_MAIL_SEND_FAILED, { error: errorMessage(mailErr) });
   }
