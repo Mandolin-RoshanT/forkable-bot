@@ -1,9 +1,7 @@
 // ForkableClient — AbortController-backed timeout + fetchFn injection.
-// These tests bypass MSW entirely and stub fetchFn directly (per
-// .claude/rules/deliverables.md: "Tests inject a stub; nobody mocks
-// globals"). The injected fetchFn either hangs until aborted, fails
-// immediately, or resolves fast, exercising each branch in
-// ForkableClient.fetchWithTimeout.
+// These tests bypass MSW entirely and stub fetchFn directly. The injected
+// fetchFn either hangs until aborted, fails immediately, or resolves fast,
+// exercising each branch in ForkableClient.fetchWithTimeout.
 
 import { describe, expect, test } from 'bun:test';
 

@@ -176,7 +176,6 @@ describe('OpenAIScorer', () => {
       const { logger, lines } = recordingLogger();
       // Throw a plain string — JS allows it. errorDetail should normalize.
       const oddCompleter: ChatCompleter = async () => {
-        // biome-ignore lint/suspicious/useErrorMessage: testing the non-Error path
         throw 'unexpected-string-throw';
       };
       const scorer = new OpenAIScorer(oddCompleter, logger);

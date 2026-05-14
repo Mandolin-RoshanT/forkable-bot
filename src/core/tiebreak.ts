@@ -16,6 +16,11 @@ export type TiebreakCandidate = {
   reasoning: string;
 };
 
+// Null prices sort last (treated as infinitely expensive).
+function priceOrInfinity(c: TiebreakCandidate): number {
+  return c.price ?? Number.POSITIVE_INFINITY;
+}
+
 export function breakTie(
   candidates: TiebreakCandidate[],
   picksThisWeek: { venue: string }[],
@@ -25,8 +30,8 @@ export function breakTie(
   // Sort a copy by (priceAsc, freshVenueDesc). Array.prototype.sort is
   // stable since ES2019, so equal entries keep their input order — the
   // implicit third tiebreaker.
-  const [winner] = [...candidates].sort((a, b) => {
-    const priceDiff = (a.price ?? Number.POSITIVE_INFINITY) - (b.price ?? Number.POSITIVE_INFINITY);
+  const sorted = candidates.slice().sort((a, b) => {
+    const priceDiff = priceOrInfinity(a) - priceOrInfinity(b);
     if (priceDiff !== 0) return priceDiff;
 
     const aFresh = !venuesUsed.has(a.venue);
@@ -37,6 +42,7 @@ export function breakTie(
     return 0;
   });
 
+  const winner = sorted[0];
   if (!winner) {
     throw new Error('breakTie: candidates must be non-empty');
   }

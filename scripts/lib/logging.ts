@@ -1,14 +1,7 @@
-// Spike-script logging. Two layers:
-//
-//   1. `log` / `logWarn` / `logError` / `logDebug` — freeform stdout helpers
-//      for the script's own narrative output ("--- GetWeek(from: ...) ---").
-//      These keep printf-style ergonomics that the production typed-event
-//      logger does not.
-//
-//   2. `captureOpsLogger` — an adapter satisfying the production `Logger`
-//      interface (LogEvent + structured data), routed to the same prefixed
-//      stdout/stderr. ForkableClient takes one of these; spike scripts pass
-//      this adapter so the [capture-ops] prefix is consistent.
+// Spike-script logging. Freeform `log`/`logWarn`/`logError`/`logDebug` for the
+// script's own narrative output, plus `captureOpsLogger` — an adapter
+// satisfying the production `Logger` interface so ForkableClient can be
+// passed into spike scripts with a consistent [capture-ops] prefix.
 
 import type { LogData, Logger } from '../../src/logger.ts';
 

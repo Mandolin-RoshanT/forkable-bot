@@ -87,9 +87,8 @@ describe('ResendMailer.sendFailure', () => {
   });
 
   test('aborts a hung Resend request via the timeout', async () => {
-    // Inject a fetchFn that hangs until the AbortSignal fires — this
-    // bypasses the global fetch shim entirely (preferred per
-    // .claude/rules/deliverables.md).
+    // Inject a fetchFn that hangs until the AbortSignal fires — bypasses
+    // the global fetch shim entirely.
     const fetchFn: FetchFn = (_url, init) =>
       new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => {

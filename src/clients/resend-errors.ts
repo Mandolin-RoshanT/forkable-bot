@@ -1,7 +1,5 @@
-// Single typed error for everything ResendMailer throws (per
-// .claude/rules/error-handling.md). Mirrors the ForkableError shape so
-// the failure-email path produces structured context instead of raw
-// Error messages.
+// Single typed error for everything ResendMailer throws. Mirrors
+// ForkableError so the failure-email path carries structured context.
 
 export type ResendErrorContext = {
   operation: string;

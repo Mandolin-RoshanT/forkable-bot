@@ -3,20 +3,16 @@
 
 import { z } from 'zod';
 
-// ─── Tunables (override via env) ──────────────────────────────────────────
-// Cap on every Forkable HTTP call. Aborted via AbortController so the
-// in-flight request is actually cancelled when the timeout fires.
+// Cap on every Forkable HTTP call (cancelled via AbortController).
 export const DEFAULT_FORKABLE_TIMEOUT_MS = 30_000;
 
-// Cap on every Resend HTTP call. Smaller — failure-email is a follow-up
-// to a primary failure, so we don't want it to hold up the cron either.
+// Smaller cap on Resend: failure-email is a follow-up to a primary failure
+// so it shouldn't hold up the cron either.
 export const DEFAULT_RESEND_TIMEOUT_MS = 10_000;
 
 // Resend's universally-verified sender. Override via NOTIFY_FROM_EMAIL
 // only when you have a verified custom domain.
 export const DEFAULT_RESEND_FROM = 'onboarding@resend.dev';
-
-// ─── Schema ───────────────────────────────────────────────────────────────
 
 const SettingsSchema = z.object({
   forkable: z.object({
@@ -36,16 +32,9 @@ const SettingsSchema = z.object({
 
 export type Settings = z.infer<typeof SettingsSchema>;
 
-// Sections that a caller can mark "not needed" — their required fields
-// get sentinel placeholders if missing from env, so a partial .env still
-// validates. ResendMailer.fromEnv / the picker each decide separately
-// whether they actually need the section at runtime.
-//
-// In production (the Friday cron) every section is needed; pass an empty
-// optional list (or omit the option entirely). Read-only flows
-// (show-week, verify-queries, the spike) pass the sections they don't
-// touch so a developer doesn't need a full set of credentials to run
-// them locally.
+// Sections a caller can mark "not needed" — their required fields get
+// sentinel placeholders if missing from env so read-only flows (show-week,
+// verify-queries) can run without a full set of credentials.
 type OptionalSection = 'openai' | 'resend';
 
 export type LoadSettingsOptions = {

@@ -3,7 +3,7 @@
 // No client knowledge here — easy to test with synthetic data.
 
 import { errorMessage } from '../lib/error-message.ts';
-import { firstPieceWithVenue, flattenItems } from '../lib/forkable-shape.ts';
+import { type FlatItem, firstPieceWithVenue, flattenItems } from '../lib/forkable-shape.ts';
 import {
   BUCKET_RANK,
   type Bucket,
@@ -165,28 +165,32 @@ async function scoreAlternatives(
 ): Promise<TiebreakCandidate[]> {
   const menus = await args.alternativesFor(day.id, day.availableMenuIds, clubId);
   const allItems = flattenItems(menus);
-  return Promise.all(
-    allItems.map(async ({ menuName, menuId, item }): Promise<TiebreakCandidate> => {
-      const score = await args.score(toCandidate(item));
-      return {
-        menuId,
-        itemId: item.id,
-        venue: menuName,
-        name: item.name,
-        price: item.price,
-        bucket: score.bucket,
-        reasoning: score.reasoning,
-      };
-    }),
-  );
+
+  async function scoreOne({ menuName, menuId, item }: FlatItem): Promise<TiebreakCandidate> {
+    const score = await args.score(toCandidate(item));
+    return {
+      menuId,
+      itemId: item.id,
+      venue: menuName,
+      name: item.name,
+      price: item.price,
+      bucket: score.bucket,
+      reasoning: score.reasoning,
+    };
+  }
+
+  return Promise.all(allItems.map(scoreOne));
 }
 
 // Highest-ranked bucket present in the candidate list (red < yellow < green).
 function findBestBucket(scored: TiebreakCandidate[]): Bucket {
-  return scored.reduce<Bucket>(
-    (best, c) => (BUCKET_RANK[c.bucket] > BUCKET_RANK[best] ? c.bucket : best),
-    'red',
-  );
+  let best: Bucket = 'red';
+  for (const c of scored) {
+    if (BUCKET_RANK[c.bucket] > BUCKET_RANK[best]) {
+      best = c.bucket;
+    }
+  }
+  return best;
 }
 
 // Issue the swap RPC, unless we're in dry-run or the day has no current
