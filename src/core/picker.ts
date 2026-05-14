@@ -2,9 +2,8 @@
 // alternatives, score, swap), decides what to do for each editable day.
 // No client knowledge here — easy to test with synthetic data.
 
-import { firstPieceWithVenue } from '../lib/delivery.ts';
 import { errorMessage } from '../lib/error-message.ts';
-import { flattenItems } from '../lib/menus.ts';
+import { firstPieceWithVenue, flattenItems } from '../lib/forkable-shape.ts';
 import {
   BUCKET_RANK,
   type Bucket,

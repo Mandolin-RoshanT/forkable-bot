@@ -8,7 +8,6 @@
 import type { z } from 'zod';
 
 import { DEFAULT_FORKABLE_TIMEOUT_MS } from '../config.ts';
-import { BROWSER_HEADERS, FORKABLE_GRAPHQL } from '../lib/constants.ts';
 import { CookieJar } from '../lib/cookie-jar.ts';
 import { errorMessage } from '../lib/error-message.ts';
 import type { FetchFn } from '../lib/fetch.ts';
@@ -36,6 +35,19 @@ import {
   ReplacePieceResponseSchema,
 } from '../schemas/forkable.ts';
 import { ForkableError } from './forkable-errors.ts';
+
+// Single source of truth for the Forkable HTTP surface. Origin/Referer
+// satisfy CSRF; Forkable-Referrer is required by the server.
+const FORKABLE_GRAPHQL = 'https://forkable.com/api/v2/graphql';
+const BROWSER_HEADERS: Record<string, string> = {
+  'Content-Type': 'application/json',
+  Accept: 'application/json',
+  Origin: 'https://forkable.com',
+  Referer: 'https://forkable.com/mc/',
+  'Forkable-Referrer': 'mc',
+  'User-Agent':
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+};
 
 export type ForkableCreds = { email: string; password: string };
 

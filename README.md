@@ -113,7 +113,7 @@ src/
 ├── commands/                  one file per CLI subcommand
 │   ├── show-week.ts           read-only week dump
 │   └── run-picker.ts          pick / dry-run pipeline
-├── lib/                       cli-format, constants, cookie-jar, dates, delivery, exhaustive, menus, redact
+├── lib/                       cli-format, cookie-jar, dates, error-message, exhaustive, fetch, forkable-shape, log-events, redact
 ├── queries/forkable.ts        GraphQL operation strings + variable types
 ├── schemas/forkable.ts        zod schemas — runtime validation + inferred types
 ├── config.ts                  loadSettings(env) — zod-validated env
@@ -124,7 +124,7 @@ src/
 └── index.ts                   thin entry point with top-level catch
 ```
 
-Tests live in `tests/{unit,integration,fixtures}/` — 90 tests across 15 files. See [`tests/README.md`](tests/README.md).
+Tests live in `tests/{unit,integration,fixtures}/`. See [`tests/README.md`](tests/README.md) for what's covered.
 
 ## Schema-drift recovery
 
