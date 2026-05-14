@@ -52,7 +52,7 @@ For each operation:
    ```
 
 5. Also note:
-   - Any non-standard request **headers** (CSRF, `X-Apollo-Operation-Id`, etc.). Switch to the **Headers** sub-tab → "Request Headers". Add to `BROWSER_HEADERS` in `src/lib/constants.ts` if needed.
+   - Any non-standard request **headers** (CSRF, `X-Apollo-Operation-Id`, etc.). Switch to the **Headers** sub-tab → "Request Headers". Add to `BROWSER_HEADERS` at the top of `src/clients/forkable.ts` if needed.
    - The day object's **status** field name (`ORDERED` vs editable) and the **cutoff** field name. Update `src/schemas/forkable.ts` accordingly.
 
 ---

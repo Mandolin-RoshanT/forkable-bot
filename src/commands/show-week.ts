@@ -7,9 +7,8 @@ import { type OpenAIScorer, createOpenAIScorer } from '../clients/openai-scorer.
 import { loadSettings } from '../config.ts';
 import { bucketLabel, dayLabel, formatPrice, truncate } from '../lib/cli-format.ts';
 import { thisWeekMonday } from '../lib/dates.ts';
-import { firstPieceWithVenue } from '../lib/delivery.ts';
+import { type FlatItem, firstPieceWithVenue, flattenItems } from '../lib/forkable-shape.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
-import { type FlatItem, flattenItems } from '../lib/menus.ts';
 import { redactEmail } from '../lib/redact.ts';
 import { createLogger } from '../logger.ts';
 import { BUCKET_RANK, type Score, toCandidate } from '../models.ts';
