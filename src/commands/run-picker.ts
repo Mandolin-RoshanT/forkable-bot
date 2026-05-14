@@ -22,17 +22,12 @@ function runLogPath(from: string): string {
   return `runs/${from}.csv`;
 }
 
-// Swap function used in dry-run mode — accepts the swap args, does nothing.
-// Named (vs an inline `async () => {}`) so it reads as the intent at the
-// callsite, not a magic empty lambda.
+// No-op swap for dry-run mode.
 async function noopSwap(): Promise<void> {}
 
 export async function runPicker(args: string[], opts: { dryRun: boolean }): Promise<number> {
   const dateArg = args.find((a) => !a.startsWith('--'));
   const skipLog = args.includes('--no-log');
-
-  // Computed once at the top so every later branch (logger, swap callback,
-  // CSV row, failure email) reads the same value.
   const mode: 'dry-run' | 'pick' = opts.dryRun ? 'dry-run' : 'pick';
 
   // Resend isn't strictly required to exercise the picker locally —

@@ -16,9 +16,7 @@ export type TiebreakCandidate = {
   reasoning: string;
 };
 
-// Null prices sort last (treated as infinitely expensive). Pulled out so
-// the comparator below reads as "price difference" rather than two ??
-// chains on the same line.
+// Null prices sort last (treated as infinitely expensive).
 function priceOrInfinity(c: TiebreakCandidate): number {
   return c.price ?? Number.POSITIVE_INFINITY;
 }

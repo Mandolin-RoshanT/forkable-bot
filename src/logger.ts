@@ -2,10 +2,9 @@
 // from every log line before output, so an accidental include of the password
 // or an API key in a payload can't leak to stdout.
 //
-// The interface takes a typed `LogEvent` constant plus an optional structured
-// `data` payload — never free-form strings (per .claude/rules/architecture.md).
-// Output format: `[forkable-bot] <level> event.name {"key":"value"}` where
-// `<level>` is omitted for INFO, and the JSON suffix is omitted when `data`
+// Calls take a typed `LogEvent` plus an optional structured `data` payload.
+// Output format: `[forkable-bot] <level> event.name {"key":"value"}` —
+// `<level>` is omitted for INFO, the JSON suffix is omitted when `data`
 // is empty.
 
 import type { Settings } from './config.ts';

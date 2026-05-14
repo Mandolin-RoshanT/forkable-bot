@@ -1,11 +1,6 @@
-// Single typed error for everything ForkableClient throws (per
-// .claude/rules/error-handling.md: "A single typed error class per
-// domain ... carrying structured context, not just a message").
-//
-// `kind` lets callers branch on the failure mode; `status` / `body`
-// carry HTTP-shaped detail; `context` carries operation metadata
-// (operation name, URL, attempt number, etc.); `cause` preserves the
-// original error so the chain isn't lost.
+// Single typed error for everything ForkableClient throws. `kind` lets
+// callers branch on the failure mode; `status` / `body` carry HTTP detail
+// when available; `context` carries operation metadata.
 
 export type ForkableErrorKind = 'auth' | 'network' | 'graphql' | 'schema';
 

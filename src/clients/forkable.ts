@@ -78,8 +78,6 @@ export class ForkableClient {
     private readonly logger: Logger,
     opts: ForkableClientOptions = {},
   ) {
-    // Bind so callers can still invoke as a free function (browser-style
-    // fetch unbinds `this` when stored in a variable).
     this.fetchFn = opts.fetchFn ?? globalThis.fetch.bind(globalThis);
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_FORKABLE_TIMEOUT_MS;
   }
@@ -243,10 +241,8 @@ export class ForkableClient {
     return { name, value };
   }
 
-  // Fetch with an AbortController-backed timeout. On timeout, throws a
-  // network-kind ForkableError carrying the operation, URL, and configured
-  // timeoutMs. Non-timeout fetch failures (DNS, connection refused, etc.)
-  // are also wrapped so callers never see a raw TypeError.
+  // Fetch with an AbortController-backed timeout. Wraps both timeout and
+  // transport failures as network-kind ForkableError.
   private async fetchWithTimeout(
     url: string,
     init: RequestInit,
@@ -276,10 +272,8 @@ export class ForkableClient {
     }
   }
 
-  // Run a zod schema against an upstream response and wrap any ZodError as
-  // a schema-kind ForkableError carrying the operation name and the raw
-  // payload. Preserves the ZodError as `cause` so the path info is intact
-  // for the schema-drift recovery flow.
+  // Wrap any ZodError as a schema-kind ForkableError carrying the operation
+  // and the raw payload, with the ZodError preserved as `cause`.
   private parseOrThrow<T>(schema: z.ZodType<T>, raw: unknown, operation: string): T {
     try {
       return schema.parse(raw);
@@ -315,10 +309,9 @@ export class ForkableClient {
     });
   }
 
-  // Public escape hatch for capture-ops and any future ad-hoc tooling.
-  // Returns the full GraphQL response, errors and all — perfect for replay
-  // or probing where you want to inspect what the server said. Network
-  // errors (non-2xx) and malformed JSON still throw.
+  // Escape hatch for capture-ops and ad-hoc tooling. Returns the full
+  // GraphQL response (including `errors`) instead of throwing on them, but
+  // still throws on non-2xx and malformed JSON.
   async rawQuery(body: GraphQLBody, opLabel = 'rawQuery'): Promise<GraphQLResponse> {
     this.requireLogin(opLabel);
     return this.postRaw(body, opLabel);

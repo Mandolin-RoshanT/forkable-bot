@@ -96,8 +96,7 @@ export function createOpenAIScorer(creds: { apiKey: string }, logger: Logger): O
         { role: 'user', content: user },
       ],
     });
-    const content = completion.choices[0]?.message?.content;
-    return content ?? '';
+    return completion.choices[0]?.message?.content ?? '';
   };
 
   return new OpenAIScorer(chat, logger);
