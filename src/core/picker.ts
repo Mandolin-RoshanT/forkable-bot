@@ -3,6 +3,7 @@
 // No client knowledge here — easy to test with synthetic data.
 
 import { firstPieceWithVenue } from '../lib/delivery.ts';
+import { errorMessage } from '../lib/error-message.ts';
 import { flattenItems } from '../lib/menus.ts';
 import {
   BUCKET_RANK,
@@ -61,7 +62,7 @@ export async function pickWeek(args: PickWeekArgs): Promise<WeekResult> {
     try {
       result = await pickOneDay(day, args, picksThisWeek);
     } catch (err) {
-      result = { kind: 'failed', date, reason: (err as Error).message };
+      result = { kind: 'failed', date, reason: errorMessage(err) };
     }
 
     const venue = committedVenue(result);

@@ -15,6 +15,7 @@ export const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 
 export const silentLogger: Logger = {
   info: () => {},
+  warn: () => {},
   error: () => {},
   debug: () => {},
 };

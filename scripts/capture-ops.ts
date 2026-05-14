@@ -10,6 +10,7 @@ import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 import { ForkableClient } from '../src/clients/forkable.ts';
+import { errorMessage } from '../src/lib/error-message.ts';
 import { CAPTURES_DIR, RAW_DIR } from './lib/constants.ts';
 import { captureOpsLogger, log, logError, redactEmail } from './lib/logging.ts';
 
@@ -34,7 +35,7 @@ async function loadCapturedOp(file: string): Promise<GraphQLBody | null> {
   try {
     raw = await readFile(path, 'utf8');
   } catch (err) {
-    log(`  ${file} → SKIP (read error: ${(err as Error).message})`);
+    log(`  ${file} → SKIP (read error: ${errorMessage(err)})`);
     return null;
   }
 
@@ -42,7 +43,7 @@ async function loadCapturedOp(file: string): Promise<GraphQLBody | null> {
   try {
     body = JSON.parse(raw) as GraphQLBody;
   } catch (err) {
-    log(`  ${file} → SKIP (invalid JSON: ${(err as Error).message})`);
+    log(`  ${file} → SKIP (invalid JSON: ${errorMessage(err)})`);
     return null;
   }
 
@@ -120,7 +121,7 @@ async function replayOne(client: ForkableClient, file: string, body: GraphQLBody
       log(`  ${opName} → ok, ${sizeKB}KB → scripts/captures/${file}`);
     }
   } catch (err) {
-    logError(`  ${opName} → FAILED: ${(err as Error).message}`);
+    logError(`  ${opName} → FAILED: ${errorMessage(err)}`);
   }
 }
 

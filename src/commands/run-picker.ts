@@ -11,7 +11,9 @@ import { pickWeek } from '../core/picker.ts';
 import { buildRows } from '../core/run-log.ts';
 import { formatPrice } from '../lib/cli-format.ts';
 import { thisWeekMonday } from '../lib/dates.ts';
+import { errorMessage } from '../lib/error-message.ts';
 import { assertNever } from '../lib/exhaustive.ts';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 import { redactEmail } from '../lib/redact.ts';
 import { type Logger, createLogger } from '../logger.ts';
 import type { DayResult, WeekResult } from '../models.ts';
@@ -32,8 +34,8 @@ export async function runPicker(args: string[], opts: { dryRun: boolean }): Prom
     NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
   });
   const logger = createLogger(settings);
-  logger.info(`account: ${redactEmail(settings.forkable.email)}`);
-  logger.info(opts.dryRun ? 'mode: DRY-RUN (no swaps will be issued)' : 'mode: LIVE');
+  logger.info(LOG_EVENTS.RUN_ACCOUNT, { account: redactEmail(settings.forkable.email) });
+  logger.info(LOG_EVENTS.RUN_MODE, { mode: opts.dryRun ? 'dry-run' : 'pick' });
 
   const mailer = ResendMailer.fromEnv(process.env, settings, logger);
 
@@ -43,10 +45,10 @@ export async function runPicker(args: string[], opts: { dryRun: boolean }): Prom
     await client.me();
 
     const from = dateArg ?? thisWeekMonday();
-    logger.info(`picker target week: ${from}`);
+    logger.info(LOG_EVENTS.RUN_TARGET_WEEK, { from });
     const days = await client.getWeek(from);
     if (days.length === 0) {
-      logger.info('no deliveries for that week');
+      logger.info(LOG_EVENTS.RUN_NO_DELIVERIES, { from });
       return 0;
     }
 
@@ -83,13 +85,13 @@ async function notifyFailure(
   logger: Logger,
 ): Promise<void> {
   if (!mailer) {
-    logger.error('RESEND_API_KEY not configured — skipping failure email');
+    logger.warn(LOG_EVENTS.RUN_NO_MAILER);
     return;
   }
   try {
     await mailer.sendFailure({ mode, error: err as Error });
   } catch (mailErr) {
-    logger.error(`also failed to send failure email: ${(mailErr as Error).message}`);
+    logger.error(LOG_EVENTS.RUN_MAIL_SEND_FAILED, { error: errorMessage(mailErr) });
   }
 }
 

@@ -3,6 +3,7 @@
 // easy to mock in tests.
 
 import type { Settings } from '../config.ts';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 import type { Logger } from '../logger.ts';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
@@ -69,6 +70,6 @@ export class ResendMailer {
       const body = await res.text();
       throw new Error(`Resend send failed: HTTP ${res.status}: ${body.slice(0, 500)}`);
     }
-    this.logger.info(`email sent: "${subject}"`);
+    this.logger.info(LOG_EVENTS.MAILER_EMAIL_SENT, { subject });
   }
 }

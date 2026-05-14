@@ -7,6 +7,7 @@
 
 import { BROWSER_HEADERS, FORKABLE_GRAPHQL } from '../lib/constants.ts';
 import { CookieJar } from '../lib/cookie-jar.ts';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 import { redactCookie } from '../lib/redact.ts';
 import type { Logger } from '../logger.ts';
 import {
@@ -93,8 +94,11 @@ export class ForkableClient {
 
     const sessionCookie = this.extractSessionCookie(beforeLogin);
 
-    this.logger.info(`createSession → ok (user ${session.user.id})`);
-    this.logger.info(`cookie attached: ${sessionCookie.name}=${redactCookie(sessionCookie.value)}`);
+    this.logger.info(LOG_EVENTS.FORKABLE_LOGIN_OK, { user: session.user.id });
+    this.logger.info(LOG_EVENTS.FORKABLE_SESSION_COOKIE, {
+      name: sessionCookie.name,
+      value: redactCookie(sessionCookie.value),
+    });
 
     this.loggedInUser = session.user;
     return session.user;
@@ -107,7 +111,7 @@ export class ForkableClient {
     if (!parsed.me) {
       throw new ForkableAuthError('me returned null — session cookie not accepted');
     }
-    this.logger.info(`me → ok (user ${parsed.me.id})`);
+    this.logger.info(LOG_EVENTS.FORKABLE_ME_OK, { user: parsed.me.id });
     return parsed.me;
   }
 
@@ -165,9 +169,11 @@ export class ForkableClient {
     );
     // Validate the shape; we don't need the value.
     ReplacePieceResponseSchema.parse(raw);
-    this.logger.info(
-      `replacePiece → ok (delivery ${args.deliveryId}, menu ${args.menuId}, item ${args.itemId})`,
-    );
+    this.logger.info(LOG_EVENTS.FORKABLE_REPLACE_OK, {
+      delivery: args.deliveryId,
+      menu: args.menuId,
+      item: args.itemId,
+    });
   }
 
   // ─── private ─────────────────────────────────────────────────────────────
@@ -203,9 +209,10 @@ export class ForkableClient {
     await res.text();
     this.jar.add(res.headers);
     const captured = this.jar.size - before;
-    this.logger.info(
-      `warmup → ${res.status} (${captured} sticky cookie${captured === 1 ? '' : 's'})`,
-    );
+    this.logger.info(LOG_EVENTS.FORKABLE_WARMUP, {
+      status: res.status,
+      stickyCookies: captured,
+    });
   }
 
   // Public escape hatch for capture-ops and any future ad-hoc tooling.
@@ -227,7 +234,7 @@ export class ForkableClient {
     }
 
     const cookieNames = this.jar.names().join(', ') || 'none';
-    this.logger.debug(`  → POST ${opLabel} (cookies: ${cookieNames})`);
+    this.logger.debug(LOG_EVENTS.FORKABLE_POST_OUT, { op: opLabel, cookies: cookieNames });
 
     const res = await fetch(FORKABLE_GRAPHQL, {
       method: 'POST',
@@ -237,7 +244,12 @@ export class ForkableClient {
     this.jar.add(res.headers);
 
     const text = await res.text();
-    this.logger.debug(`  ← ${res.status} ${res.statusText} (${text.length}B)`);
+    this.logger.debug(LOG_EVENTS.FORKABLE_POST_IN, {
+      op: opLabel,
+      status: res.status,
+      statusText: res.statusText,
+      bytes: text.length,
+    });
 
     if (!res.ok) {
       throw new ForkableNetworkError(
