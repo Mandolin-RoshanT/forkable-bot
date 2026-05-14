@@ -8,7 +8,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import OpenAI from 'openai';
 
-import { errorMessage } from '../lib/error-message.ts';
+import { errorDetail, errorMessage } from '../lib/error-message.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import type { Logger } from '../logger.ts';
 import { type MealCandidate, type Score, ScoreSchema } from '../models.ts';
@@ -41,21 +41,21 @@ export class OpenAIScorer {
     try {
       raw = await this.chat({ system, user });
     } catch (err) {
-      const msg = errorMessage(err);
       this.logger.error(LOG_EVENTS.SCORER_NETWORK_FAILED, {
         candidate: candidate.name,
-        error: msg,
+        ...errorDetail(err),
       });
-      return redScore(`OpenAI error: ${msg}`);
+      return redScore(`OpenAI error: ${errorMessage(err)}`);
     }
 
     let json: unknown;
     try {
       json = JSON.parse(raw);
-    } catch {
+    } catch (err) {
       this.logger.error(LOG_EVENTS.SCORER_INVALID_JSON, {
         candidate: candidate.name,
         rawPreview: raw.slice(0, 200),
+        ...errorDetail(err),
       });
       return redScore('parse failed: invalid JSON');
     }
@@ -64,6 +64,10 @@ export class OpenAIScorer {
     if (!parsed.success) {
       this.logger.error(LOG_EVENTS.SCORER_SCHEMA_FAILED, {
         candidate: candidate.name,
+        // zod reports per-field issues — surface the paths so a drift in
+        // the model's output (e.g. "bucket" → "verdict") is one log line
+        // to diagnose, not a manual hunt through the message.
+        issuePaths: parsed.error.issues.map((i) => i.path.join('.')),
         error: parsed.error.message,
       });
       return redScore(`parse failed: ${parsed.error.message}`);

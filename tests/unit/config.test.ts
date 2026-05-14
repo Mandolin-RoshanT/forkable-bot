@@ -73,4 +73,44 @@ describe('loadSettings', () => {
       /forkable\.timeoutMs/,
     );
   });
+
+  describe('optional sections', () => {
+    test("optional: ['resend'] fills in placeholders when RESEND_* vars are missing", () => {
+      const { RESEND_API_KEY: _r, NOTIFY_TO_EMAIL: _n, ...withoutResend } = VALID_ENV;
+      const settings = loadSettings(withoutResend, { optional: ['resend'] });
+      expect(settings.resend.apiKey).toBe('unused-placeholder');
+      expect(settings.resend.notifyTo).toBe('noreply@example.com');
+      // Forkable creds are still required.
+      expect(settings.forkable.email).toBe('user@example.com');
+    });
+
+    test("optional: ['openai'] fills in the OpenAI key when missing", () => {
+      const { OPENAI_API_KEY: _o, ...withoutOpenAI } = VALID_ENV;
+      const settings = loadSettings(withoutOpenAI, { optional: ['openai'] });
+      expect(settings.openaiApiKey).toBe('unused-placeholder');
+    });
+
+    test('without optional, missing RESEND_API_KEY still throws', () => {
+      const { RESEND_API_KEY: _r, ...withoutResend } = VALID_ENV;
+      expect(() => loadSettings(withoutResend)).toThrow(/resend\.apiKey/);
+    });
+
+    test('without optional, missing OPENAI_API_KEY still throws', () => {
+      const { OPENAI_API_KEY: _o, ...withoutOpenAI } = VALID_ENV;
+      expect(() => loadSettings(withoutOpenAI)).toThrow(/openaiApiKey/);
+    });
+
+    test('a real value in env wins over the placeholder even when section is optional', () => {
+      const settings = loadSettings(VALID_ENV, { optional: ['openai', 'resend'] });
+      expect(settings.openaiApiKey).toBe('sk-xxx');
+      expect(settings.resend.apiKey).toBe('re_yyy');
+    });
+
+    test('forkable section is never optional — missing FORKABLE_PASSWORD still throws', () => {
+      const { FORKABLE_PASSWORD: _p, ...withoutPw } = VALID_ENV;
+      expect(() => loadSettings(withoutPw, { optional: ['openai', 'resend'] })).toThrow(
+        /forkable\.password/,
+      );
+    });
+  });
 });

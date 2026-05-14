@@ -36,17 +36,51 @@ const SettingsSchema = z.object({
 
 export type Settings = z.infer<typeof SettingsSchema>;
 
-export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
+// Sections that a caller can mark "not needed" — their required fields
+// get sentinel placeholders if missing from env, so a partial .env still
+// validates. ResendMailer.fromEnv / the picker each decide separately
+// whether they actually need the section at runtime.
+//
+// In production (the Friday cron) every section is needed; pass an empty
+// optional list (or omit the option entirely). Read-only flows
+// (show-week, verify-queries, the spike) pass the sections they don't
+// touch so a developer doesn't need a full set of credentials to run
+// them locally.
+type OptionalSection = 'openai' | 'resend';
+
+export type LoadSettingsOptions = {
+  optional?: OptionalSection[];
+};
+
+const PLACEHOLDER = {
+  openaiApiKey: 'unused-placeholder',
+  resendApiKey: 'unused-placeholder',
+  notifyToEmail: 'noreply@example.com',
+} as const;
+
+export function loadSettings(
+  env: NodeJS.ProcessEnv = process.env,
+  opts: LoadSettingsOptions = {},
+): Settings {
+  const optional = new Set(opts.optional ?? []);
+
+  const openaiApiKey =
+    env.OPENAI_API_KEY || (optional.has('openai') ? PLACEHOLDER.openaiApiKey : undefined);
+  const resendApiKey =
+    env.RESEND_API_KEY || (optional.has('resend') ? PLACEHOLDER.resendApiKey : undefined);
+  const notifyTo =
+    env.NOTIFY_TO_EMAIL || (optional.has('resend') ? PLACEHOLDER.notifyToEmail : undefined);
+
   const result = SettingsSchema.safeParse({
     forkable: {
       email: env.FORKABLE_EMAIL,
       password: env.FORKABLE_PASSWORD,
       timeoutMs: env.FORKABLE_TIMEOUT_MS || undefined,
     },
-    openaiApiKey: env.OPENAI_API_KEY,
+    openaiApiKey,
     resend: {
-      apiKey: env.RESEND_API_KEY,
-      notifyTo: env.NOTIFY_TO_EMAIL,
+      apiKey: resendApiKey,
+      notifyTo,
       // Empty-string → undefined so the schema default kicks in (Bun
       // loads `.env` literally, so `NOTIFY_FROM_EMAIL=` is a real "").
       notifyFrom: env.NOTIFY_FROM_EMAIL || undefined,

@@ -12,13 +12,9 @@ Living list. Items here are deliberately deferred, not bugs.
 
 ## Deferred improvements
 
-- **MSW handler fixtures.** The handlers in
-  `tests/integration/forkable.test.ts` are inline. If we add many more,
-  extract to `tests/fixtures/msw-handlers.ts`.
+- **MSW handler fixtures.** Handlers in the split `forkable.*.test.ts`
+  files are inline. If we add many more, extract to
+  `tests/fixtures/msw-handlers.ts`.
 - **Inject the GraphQL URL into `ForkableClient`.** Currently hard-coded
-  in `src/lib/constants.ts`. For mock-server tests on a different host
-  we'd want a constructor option. Not urgent.
-- **Settings injection for the spike.** Several scripts need a stubbed
-  `Settings` to use `loadSettings()`. Could simplify by giving
-  `loadSettings` a `partial: true` mode for utilities, OR by exposing
-  smaller setting-shapes for the parts they need.
+  at the top of `src/clients/forkable.ts`. For mock-server tests on a
+  different host we'd want a constructor option. Not urgent.

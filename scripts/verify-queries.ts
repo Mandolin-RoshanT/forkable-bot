@@ -12,14 +12,9 @@ import { errorMessage } from '../src/lib/error-message.ts';
 import { captureOpsLogger, log, logError, redactEmail } from './lib/logging.ts';
 
 async function main(): Promise<void> {
-  // OpenAI/Resend keys aren't used by this script; stub them so we don't
-  // need them in .env to run a forkable-only check.
-  const settings = loadSettings({
-    ...process.env,
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'unused-in-verify',
-    RESEND_API_KEY: process.env.RESEND_API_KEY || 'unused-in-verify',
-    NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
-  });
+  // OpenAI/Resend aren't used by this script; mark both optional so we
+  // don't need their env vars to run a forkable-only check.
+  const settings = loadSettings(process.env, { optional: ['openai', 'resend'] });
   log(`account: ${redactEmail(settings.forkable.email)}`);
 
   const client = new ForkableClient(settings.forkable, captureOpsLogger, {
