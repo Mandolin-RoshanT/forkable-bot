@@ -30,12 +30,7 @@ import {
   type Menu,
   ReplacePieceResponseSchema,
 } from '../schemas/forkable.ts';
-import {
-  ForkableAuthError,
-  ForkableError,
-  ForkableNetworkError,
-  ForkableSchemaError,
-} from './forkable-errors.ts';
+import { ForkableError } from './forkable-errors.ts';
 
 export type ForkableCreds = { email: string; password: string };
 
@@ -82,14 +77,22 @@ export class ForkableClient {
     const session = parsed.createSession;
 
     if (!session.user) {
-      throw new ForkableAuthError(
-        `createSession returned no user. errorAttributes=${JSON.stringify(
-          session.errorAttributes,
-        )} errorDetails=${JSON.stringify(session.errorDetails)}`,
-      );
+      throw new ForkableError({
+        kind: 'auth',
+        message: 'createSession returned no user',
+        body: {
+          errorAttributes: session.errorAttributes,
+          errorDetails: session.errorDetails,
+        },
+        context: { operation: 'createSession' },
+      });
     }
     if (session.user.mfaEnabled) {
-      throw new ForkableAuthError('MFA is enabled — bot cannot proceed (PRD §7.1).');
+      throw new ForkableError({
+        kind: 'auth',
+        message: 'MFA is enabled — bot cannot proceed (PRD §7.1)',
+        context: { operation: 'createSession' },
+      });
     }
 
     const sessionCookie = this.extractSessionCookie(beforeLogin);
@@ -109,7 +112,11 @@ export class ForkableClient {
     const raw = await this.post({ operationName: 'Me', query: ME_QUERY }, 'Me');
     const parsed = MeResponseSchema.parse(raw);
     if (!parsed.me) {
-      throw new ForkableAuthError('me returned null — session cookie not accepted');
+      throw new ForkableError({
+        kind: 'auth',
+        message: 'me returned null — session cookie not accepted',
+        context: { operation: 'me' },
+      });
     }
     this.logger.info(LOG_EVENTS.FORKABLE_ME_OK, { user: parsed.me.id });
     return parsed.me;
@@ -141,8 +148,8 @@ export class ForkableClient {
 
   // Swap the user's chosen piece for a different (menu, item) on the same day.
   // Per locked v1 decision: selectionsHash={} (server fills modifier defaults).
-  // Throws ForkableNetworkError / ForkableError / ForkableSchemaError on
-  // failure; caller catches per-day so a single bad swap can't kill the run.
+  // Throws ForkableError (kind: 'network' | 'schema' | 'graphql') on failure;
+  // caller catches per-day so a single bad swap can't kill the run.
   async swapMeal(args: {
     deliveryId: number;
     oldPieceId: string;
@@ -180,7 +187,11 @@ export class ForkableClient {
 
   private requireLogin(method: string): void {
     if (!this.loggedInUser) {
-      throw new ForkableAuthError(`must login() before calling ${method}()`);
+      throw new ForkableError({
+        kind: 'auth',
+        message: `must login() before calling ${method}()`,
+        context: { operation: method },
+      });
     }
   }
 
@@ -192,7 +203,11 @@ export class ForkableClient {
     const newCookies = this.jar.diff(beforeLogin);
     const name = newCookies.find((n) => n.toLowerCase().includes('session')) ?? newCookies[0];
     if (!name) {
-      throw new ForkableAuthError('createSession set no new cookies — auth flow broken');
+      throw new ForkableError({
+        kind: 'auth',
+        message: 'createSession set no new cookies — auth flow broken',
+        context: { operation: 'createSession' },
+      });
     }
     const value = this.jar.get(name) ?? '';
     return { name, value };
@@ -252,16 +267,29 @@ export class ForkableClient {
     });
 
     if (!res.ok) {
-      throw new ForkableNetworkError(
-        `${opLabel}: HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
-        res.status,
-      );
+      throw new ForkableError({
+        kind: 'network',
+        message: `${opLabel}: HTTP ${res.status} ${res.statusText}`,
+        status: res.status,
+        body: text.slice(0, 500),
+        context: {
+          operation: opLabel,
+          url: FORKABLE_GRAPHQL,
+          statusText: res.statusText,
+        },
+      });
     }
 
     try {
       return JSON.parse(text) as GraphQLResponse;
     } catch (err) {
-      throw new ForkableSchemaError(`${opLabel}: response was not valid JSON`, err);
+      throw new ForkableError({
+        kind: 'schema',
+        message: `${opLabel}: response was not valid JSON`,
+        body: text.slice(0, 500),
+        context: { operation: opLabel },
+        cause: err,
+      });
     }
   }
 
@@ -270,7 +298,12 @@ export class ForkableClient {
   private async post(body: GraphQLBody, opLabel: string): Promise<unknown> {
     const res = await this.postRaw(body, opLabel);
     if (res.errors && res.errors.length > 0) {
-      throw new ForkableError(`${opLabel}: GraphQL errors: ${JSON.stringify(res.errors)}`);
+      throw new ForkableError({
+        kind: 'graphql',
+        message: `${opLabel}: GraphQL errors`,
+        body: res.errors,
+        context: { operation: opLabel },
+      });
     }
     return res.data;
   }

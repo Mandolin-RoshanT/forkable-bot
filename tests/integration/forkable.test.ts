@@ -8,12 +8,7 @@ import { describe, expect, test } from 'bun:test';
 import { resolve } from 'node:path';
 import { http, HttpResponse } from 'msw';
 
-import {
-  ForkableAuthError,
-  ForkableError,
-  ForkableNetworkError,
-  ForkableSchemaError,
-} from '../../src/clients/forkable-errors.ts';
+import { ForkableError } from '../../src/clients/forkable-errors.ts';
 import { ForkableClient } from '../../src/clients/forkable.ts';
 import type { Settings } from '../../src/config.ts';
 import {
@@ -191,7 +186,7 @@ describe('ForkableClient — happy paths', () => {
 // ─── Error paths ──────────────────────────────────────────────────────────
 
 describe('ForkableClient — auth errors', () => {
-  test('login() throws ForkableAuthError when createSession returns no user', async () => {
+  test('login() throws an auth-kind ForkableError when createSession returns no user', async () => {
     server.use(
       graphqlHandler({
         CreateSession: () =>
@@ -208,10 +203,17 @@ describe('ForkableClient — auth errors', () => {
     );
 
     const client = new ForkableClient(baseSettings.forkable, silentLogger);
-    await expect(client.login()).rejects.toBeInstanceOf(ForkableAuthError);
+    const err = (await client.login().catch((e) => e)) as ForkableError;
+    expect(err).toBeInstanceOf(ForkableError);
+    expect(err.kind).toBe('auth');
+    expect(err.context.operation).toBe('createSession');
+    expect(err.body).toEqual({
+      errorAttributes: { email: 'invalid' },
+      errorDetails: 'wrong password',
+    });
   });
 
-  test('login() throws ForkableAuthError when MFA is enabled', async () => {
+  test('login() throws an auth-kind ForkableError when MFA is enabled', async () => {
     server.use(
       graphqlHandler({
         CreateSession: () =>
@@ -234,7 +236,7 @@ describe('ForkableClient — auth errors', () => {
     await expect(client.login()).rejects.toThrow(/MFA/);
   });
 
-  test('login() throws ForkableAuthError when no Set-Cookie returned', async () => {
+  test('login() throws an auth-kind ForkableError when no Set-Cookie returned', async () => {
     server.use(
       graphqlHandler({
         CreateSession: () =>
@@ -261,7 +263,7 @@ describe('ForkableClient — auth errors', () => {
     await expect(client.getWeek('2026-05-04')).rejects.toThrow(/must login/);
   });
 
-  test('me() throws ForkableAuthError when session cookie not accepted', async () => {
+  test('me() throws an auth-kind ForkableError when session cookie not accepted', async () => {
     server.use(
       graphqlHandler({
         CreateSession: createSessionOk,
@@ -271,12 +273,15 @@ describe('ForkableClient — auth errors', () => {
 
     const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
-    await expect(client.me()).rejects.toBeInstanceOf(ForkableAuthError);
+    const err = (await client.me().catch((e) => e)) as ForkableError;
+    expect(err).toBeInstanceOf(ForkableError);
+    expect(err.kind).toBe('auth');
+    expect(err.context.operation).toBe('me');
   });
 });
 
 describe('ForkableClient — transport errors', () => {
-  test('throws ForkableNetworkError on 500', async () => {
+  test('throws a network-kind ForkableError on 500', async () => {
     server.use(
       graphqlHandler({
         CreateSession: createSessionOk,
@@ -286,12 +291,15 @@ describe('ForkableClient — transport errors', () => {
 
     const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
-    const err = (await client.getWeek('2026-05-04').catch((e) => e)) as ForkableNetworkError;
-    expect(err).toBeInstanceOf(ForkableNetworkError);
+    const err = (await client.getWeek('2026-05-04').catch((e) => e)) as ForkableError;
+    expect(err).toBeInstanceOf(ForkableError);
+    expect(err.kind).toBe('network');
     expect(err.status).toBe(500);
+    expect(err.body).toContain('Internal Server Error');
+    expect(err.context.operation).toBe('GetWeek');
   });
 
-  test('throws ForkableSchemaError on non-JSON response', async () => {
+  test('throws a schema-kind ForkableError on non-JSON response', async () => {
     server.use(
       graphqlHandler({
         CreateSession: createSessionOk,
@@ -301,10 +309,13 @@ describe('ForkableClient — transport errors', () => {
 
     const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
-    await expect(client.getWeek('2026-05-04')).rejects.toBeInstanceOf(ForkableSchemaError);
+    const err = (await client.getWeek('2026-05-04').catch((e) => e)) as ForkableError;
+    expect(err).toBeInstanceOf(ForkableError);
+    expect(err.kind).toBe('schema');
+    expect(err.cause).toBeDefined();
   });
 
-  test('getAlternatives() throws ForkableNetworkError on 500', async () => {
+  test('getAlternatives() throws a network-kind ForkableError on 500', async () => {
     server.use(
       graphqlHandler({
         CreateSession: createSessionOk,
@@ -314,14 +325,13 @@ describe('ForkableClient — transport errors', () => {
 
     const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
-    const err = (await client
-      .getAlternatives([1, 2, 3], 6059)
-      .catch((e) => e)) as ForkableNetworkError;
-    expect(err).toBeInstanceOf(ForkableNetworkError);
+    const err = (await client.getAlternatives([1, 2, 3], 6059).catch((e) => e)) as ForkableError;
+    expect(err).toBeInstanceOf(ForkableError);
+    expect(err.kind).toBe('network');
     expect(err.status).toBe(500);
   });
 
-  test('throws ForkableError on GraphQL-level errors in response', async () => {
+  test('throws a graphql-kind ForkableError on GraphQL-level errors in response', async () => {
     server.use(
       graphqlHandler({
         CreateSession: createSessionOk,
@@ -332,6 +342,9 @@ describe('ForkableClient — transport errors', () => {
 
     const client = new ForkableClient(baseSettings.forkable, silentLogger);
     await client.login();
-    await expect(client.getWeek('2026-05-04')).rejects.toBeInstanceOf(ForkableError);
+    const err = (await client.getWeek('2026-05-04').catch((e) => e)) as ForkableError;
+    expect(err).toBeInstanceOf(ForkableError);
+    expect(err.kind).toBe('graphql');
+    expect(err.body).toEqual([{ message: "Field 'foo' doesn't exist on type 'Query'" }]);
   });
 });
