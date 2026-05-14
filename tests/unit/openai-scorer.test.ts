@@ -4,8 +4,26 @@
 import { describe, expect, test } from 'bun:test';
 
 import { type ChatCompleter, OpenAIScorer } from '../../src/clients/openai-scorer.ts';
+import type { LogData, Logger } from '../../src/logger.ts';
 import type { MealCandidate } from '../../src/models.ts';
 import { silentLogger } from '../fixtures/msw.ts';
+
+type RecordedLog = {
+  level: 'info' | 'warn' | 'error' | 'debug';
+  event: string;
+  data: LogData | undefined;
+};
+
+function recordingLogger(): { logger: Logger; lines: RecordedLog[] } {
+  const lines: RecordedLog[] = [];
+  const logger: Logger = {
+    info: (event, data) => lines.push({ level: 'info', event, data }),
+    warn: (event, data) => lines.push({ level: 'warn', event, data }),
+    error: (event, data) => lines.push({ level: 'error', event, data }),
+    debug: (event, data) => lines.push({ level: 'debug', event, data }),
+  };
+  return { logger, lines };
+}
 
 const sampleCandidate: MealCandidate = {
   name: 'Chicken and Broccoli Bowl',
@@ -103,5 +121,70 @@ describe('OpenAIScorer', () => {
     expect(capturedSystem).toContain('green');
     expect(capturedSystem).toContain('yellow');
     expect(capturedSystem).toContain('red');
+  });
+
+  describe('structured error logging', () => {
+    test('network failure log carries error name + message + candidate', async () => {
+      const { logger, lines } = recordingLogger();
+      const failingCompleter: ChatCompleter = async () => {
+        const err = new TypeError('rate limit exceeded');
+        throw err;
+      };
+      const scorer = new OpenAIScorer(failingCompleter, logger);
+      await scorer.score(sampleCandidate);
+
+      const errLine = lines.find((l) => l.event === 'scorer.network_failed');
+      expect(errLine).toBeDefined();
+      expect(errLine?.level).toBe('error');
+      expect(errLine?.data?.candidate).toBe(sampleCandidate.name);
+      expect(errLine?.data?.name).toBe('TypeError');
+      expect(errLine?.data?.message).toBe('rate limit exceeded');
+    });
+
+    test('invalid-JSON log carries the SyntaxError detail and a raw preview', async () => {
+      const { logger, lines } = recordingLogger();
+      const scorer = new OpenAIScorer(fakeCompleter('not json at all'), logger);
+      await scorer.score(sampleCandidate);
+
+      const errLine = lines.find((l) => l.event === 'scorer.invalid_json');
+      expect(errLine).toBeDefined();
+      expect(errLine?.data?.candidate).toBe(sampleCandidate.name);
+      expect(errLine?.data?.rawPreview).toBe('not json at all');
+      // Bun's JSON.parse throws a SyntaxError; the detail should land in the log.
+      expect(errLine?.data?.name).toBe('SyntaxError');
+      expect(errLine?.data?.message).toBeDefined();
+    });
+
+    test('schema-failure log lists the zod issue paths so drift is one line to diagnose', async () => {
+      const { logger, lines } = recordingLogger();
+      const scorer = new OpenAIScorer(
+        fakeCompleter(JSON.stringify({ verdict: 'green', why: 'nope' })),
+        logger,
+      );
+      await scorer.score(sampleCandidate);
+
+      const errLine = lines.find((l) => l.event === 'scorer.schema_failed');
+      expect(errLine).toBeDefined();
+      expect(errLine?.data?.candidate).toBe(sampleCandidate.name);
+      // Zod will report both `bucket` and `reasoning` as missing fields.
+      const paths = errLine?.data?.issuePaths as string[];
+      expect(paths).toContain('bucket');
+      expect(paths).toContain('reasoning');
+    });
+
+    test('non-Error throws still produce a structured log line', async () => {
+      const { logger, lines } = recordingLogger();
+      // Throw a plain string — JS allows it. errorDetail should normalize.
+      const oddCompleter: ChatCompleter = async () => {
+        // biome-ignore lint/suspicious/useErrorMessage: testing the non-Error path
+        throw 'unexpected-string-throw';
+      };
+      const scorer = new OpenAIScorer(oddCompleter, logger);
+      await scorer.score(sampleCandidate);
+
+      const errLine = lines.find((l) => l.event === 'scorer.network_failed');
+      expect(errLine?.data?.name).toBe('NonError');
+      expect(errLine?.data?.message).toBe('unexpected-string-throw');
+    });
   });
 });
