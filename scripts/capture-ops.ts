@@ -145,7 +145,7 @@ async function main(): Promise<void> {
   const client = new ForkableClient({ email, password }, captureOpsLogger);
   await client.login();
   await client.me();
-  log('login flow verified ✓');
+  log('login flow verified');
 
   await replayCaptures(client, allowMutations);
   log('done');

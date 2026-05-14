@@ -81,7 +81,7 @@ Expected output (minimal, with redacted secrets):
 [capture-ops] createSession → ok (user 12345, mfa: false)
 [capture-ops] cookie attached: <19 chars, prefix: AbCd>
 [capture-ops] me → ok (user 12345)
-[capture-ops] login flow verified ✓
+[capture-ops] login flow verified
 [capture-ops] replaying 2 query operation(s) from scripts/captures/raw/
 [capture-ops]   get-week → ok, 8.2KB → scripts/captures/get-week.json
 [capture-ops]   get-alternatives → ok, 12.4KB → scripts/captures/get-alternatives.json
