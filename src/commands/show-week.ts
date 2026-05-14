@@ -31,7 +31,9 @@ export async function showWeek(args: string[]): Promise<number> {
   const logger = createLogger(settings);
   logger.info(LOG_EVENTS.RUN_ACCOUNT, { account: redactEmail(settings.forkable.email) });
 
-  const client = new ForkableClient(settings.forkable, logger);
+  const client = new ForkableClient(settings.forkable, logger, {
+    timeoutMs: settings.forkable.timeoutMs,
+  });
   await client.login();
   await client.me();
 

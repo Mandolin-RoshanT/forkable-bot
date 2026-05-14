@@ -7,8 +7,11 @@
 
 import type { z } from 'zod';
 
+import { DEFAULT_FORKABLE_TIMEOUT_MS } from '../config.ts';
 import { BROWSER_HEADERS, FORKABLE_GRAPHQL } from '../lib/constants.ts';
 import { CookieJar } from '../lib/cookie-jar.ts';
+import { errorMessage } from '../lib/error-message.ts';
+import type { FetchFn } from '../lib/fetch.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { redactCookie } from '../lib/redact.ts';
 import type { Logger } from '../logger.ts';
@@ -36,6 +39,11 @@ import { ForkableError } from './forkable-errors.ts';
 
 export type ForkableCreds = { email: string; password: string };
 
+export type ForkableClientOptions = {
+  fetchFn?: FetchFn;
+  timeoutMs?: number;
+};
+
 type GraphQLBody = {
   operationName?: string;
   query: string;
@@ -50,11 +58,19 @@ type GraphQLResponse<T = unknown> = {
 export class ForkableClient {
   private readonly jar = new CookieJar();
   private loggedInUser: ForkableUser | null = null;
+  private readonly fetchFn: FetchFn;
+  private readonly timeoutMs: number;
 
   constructor(
     private readonly creds: ForkableCreds,
     private readonly logger: Logger,
-  ) {}
+    opts: ForkableClientOptions = {},
+  ) {
+    // Bind so callers can still invoke as a free function (browser-style
+    // fetch unbinds `this` when stored in a variable).
+    this.fetchFn = opts.fetchFn ?? globalThis.fetch.bind(globalThis);
+    this.timeoutMs = opts.timeoutMs ?? DEFAULT_FORKABLE_TIMEOUT_MS;
+  }
 
   // Full login flow: warmup → createSession → confirm session cookie present.
   async login(): Promise<ForkableUser> {
@@ -215,6 +231,39 @@ export class ForkableClient {
     return { name, value };
   }
 
+  // Fetch with an AbortController-backed timeout. On timeout, throws a
+  // network-kind ForkableError carrying the operation, URL, and configured
+  // timeoutMs. Non-timeout fetch failures (DNS, connection refused, etc.)
+  // are also wrapped so callers never see a raw TypeError.
+  private async fetchWithTimeout(
+    url: string,
+    init: RequestInit,
+    operation: string,
+  ): Promise<Response> {
+    const ctl = new AbortController();
+    const timeoutId = setTimeout(() => ctl.abort(), this.timeoutMs);
+    try {
+      return await this.fetchFn(url, { ...init, signal: ctl.signal });
+    } catch (err) {
+      if (ctl.signal.aborted) {
+        throw new ForkableError({
+          kind: 'network',
+          message: `${operation}: request timed out after ${this.timeoutMs}ms`,
+          context: { operation, url, timeoutMs: this.timeoutMs },
+          cause: err,
+        });
+      }
+      throw new ForkableError({
+        kind: 'network',
+        message: `${operation}: ${errorMessage(err)}`,
+        context: { operation, url },
+        cause: err,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   // Run a zod schema against an upstream response and wrap any ZodError as
   // a schema-kind ForkableError carrying the operation name and the raw
   // payload. Preserves the ZodError as `cause` so the path info is intact
@@ -236,11 +285,15 @@ export class ForkableClient {
   // Anonymous POST → expected 401, seeds AWS ALB sticky-session cookies.
   private async warmup(): Promise<void> {
     const before = this.jar.size;
-    const res = await fetch(FORKABLE_GRAPHQL, {
-      method: 'POST',
-      headers: BROWSER_HEADERS,
-      body: JSON.stringify({ query: '{__typename}' }),
-    });
+    const res = await this.fetchWithTimeout(
+      FORKABLE_GRAPHQL,
+      {
+        method: 'POST',
+        headers: BROWSER_HEADERS,
+        body: JSON.stringify({ query: '{__typename}' }),
+      },
+      'warmup',
+    );
     await res.text();
     this.jar.add(res.headers);
     const captured = this.jar.size - before;
@@ -271,11 +324,15 @@ export class ForkableClient {
     const cookieNames = this.jar.names().join(', ') || 'none';
     this.logger.debug(LOG_EVENTS.FORKABLE_POST_OUT, { op: opLabel, cookies: cookieNames });
 
-    const res = await fetch(FORKABLE_GRAPHQL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
+    const res = await this.fetchWithTimeout(
+      FORKABLE_GRAPHQL,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      },
+      opLabel,
+    );
     this.jar.add(res.headers);
 
     const text = await res.text();
