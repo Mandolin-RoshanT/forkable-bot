@@ -7,7 +7,7 @@ import { createOpenAIScorer } from '../clients/openai-scorer.ts';
 import { ResendMailer } from '../clients/resend-mailer.ts';
 import { CsvRunLogWriter } from '../clients/run-log-writer.ts';
 import { loadSettings } from '../config.ts';
-import { pickWeek } from '../core/picker.ts';
+import { type SwapFn, pickWeek } from '../core/picker.ts';
 import { buildRows } from '../core/run-log.ts';
 import { formatPrice } from '../lib/cli-format.ts';
 import { thisWeekMonday } from '../lib/dates.ts';
@@ -22,9 +22,18 @@ function runLogPath(from: string): string {
   return `runs/${from}.csv`;
 }
 
+// Swap function used in dry-run mode — accepts the swap args, does nothing.
+// Named (vs an inline `async () => {}`) so it reads as the intent at the
+// callsite, not a magic empty lambda.
+async function noopSwap(): Promise<void> {}
+
 export async function runPicker(args: string[], opts: { dryRun: boolean }): Promise<number> {
   const dateArg = args.find((a) => !a.startsWith('--'));
   const skipLog = args.includes('--no-log');
+
+  // Computed once at the top so every later branch (logger, swap callback,
+  // CSV row, failure email) reads the same value.
+  const mode: 'dry-run' | 'pick' = opts.dryRun ? 'dry-run' : 'pick';
 
   // Resend isn't strictly required to exercise the picker locally —
   // ResendMailer.fromEnv() decides at runtime whether to send the
@@ -33,7 +42,7 @@ export async function runPicker(args: string[], opts: { dryRun: boolean }): Prom
   const settings = loadSettings(process.env, { optional: ['resend'] });
   const logger = createLogger(settings);
   logger.info(LOG_EVENTS.RUN_ACCOUNT, { account: redactEmail(settings.forkable.email) });
-  logger.info(LOG_EVENTS.RUN_MODE, { mode: opts.dryRun ? 'dry-run' : 'pick' });
+  logger.info(LOG_EVENTS.RUN_MODE, { mode });
 
   const mailer = ResendMailer.fromEnv(process.env, settings, logger);
 
@@ -53,25 +62,26 @@ export async function runPicker(args: string[], opts: { dryRun: boolean }): Prom
     }
 
     const scorer = createOpenAIScorer({ apiKey: settings.openaiApiKey }, logger);
+    const swap: SwapFn = opts.dryRun ? noopSwap : (input) => client.swapMeal(input);
     const result = await pickWeek({
       from,
       days,
       alternativesFor: (_deliveryId, menuIds, clubId) => client.getAlternatives(menuIds, clubId),
       score: (cand) => scorer.score(cand),
-      swap: opts.dryRun ? async () => {} : (input) => client.swapMeal(input),
+      swap,
       dryRun: opts.dryRun,
     });
 
     if (!skipLog) {
       const writer = new CsvRunLogWriter(runLogPath(from), logger);
-      const rows = buildRows(new Date().toISOString(), opts.dryRun ? 'dry-run' : 'pick', result);
+      const rows = buildRows(new Date().toISOString(), mode, result);
       await writer.write(rows);
     }
 
     printWeekResult(result, opts.dryRun);
     return 0;
   } catch (err) {
-    await notifyFailure(err, opts.dryRun ? 'dry-run' : 'pick', mailer, logger);
+    await notifyFailure(err, mode, mailer, logger);
     throw err;
   }
 }
