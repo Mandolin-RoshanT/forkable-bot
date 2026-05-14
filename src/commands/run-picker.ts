@@ -26,13 +26,11 @@ export async function runPicker(args: string[], opts: { dryRun: boolean }): Prom
   const dateArg = args.find((a) => !a.startsWith('--'));
   const skipLog = args.includes('--no-log');
 
-  // Stub anything missing so .env doesn't need to be fully populated to
-  // exercise the picker locally. Production cron has all secrets.
-  const settings = loadSettings({
-    ...process.env,
-    RESEND_API_KEY: process.env.RESEND_API_KEY || 'unconfigured',
-    NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
-  });
+  // Resend isn't strictly required to exercise the picker locally —
+  // ResendMailer.fromEnv() decides at runtime whether to send the
+  // failure email. Mark it optional so a partial .env still loads.
+  // In the prod cron, RESEND_API_KEY is set, so this is a no-op.
+  const settings = loadSettings(process.env, { optional: ['resend'] });
   const logger = createLogger(settings);
   logger.info(LOG_EVENTS.RUN_ACCOUNT, { account: redactEmail(settings.forkable.email) });
   logger.info(LOG_EVENTS.RUN_MODE, { mode: opts.dryRun ? 'dry-run' : 'pick' });

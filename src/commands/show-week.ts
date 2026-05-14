@@ -18,15 +18,11 @@ export async function showWeek(args: string[]): Promise<number> {
   const noScore = args.includes('--no-score');
   const dateArg = args.find((a) => !a.startsWith('--'));
 
-  // Resend keys aren't used here. OpenAI is also unused if --no-score, in
-  // which case we stub the key so .env doesn't need to be fully populated
-  // for a read-only flow.
-  const settings = loadSettings({
-    ...process.env,
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY || (noScore ? 'unused-by-no-score' : undefined),
-    RESEND_API_KEY: process.env.RESEND_API_KEY || 'unused-by-show-week',
-    NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
-  });
+  // Resend isn't used here at all (show-week never emails). OpenAI is
+  // only used when scoring; with --no-score we don't need it either.
+  const optional: ('openai' | 'resend')[] = ['resend'];
+  if (noScore) optional.push('openai');
+  const settings = loadSettings(process.env, { optional });
   const logger = createLogger(settings);
   logger.info(LOG_EVENTS.RUN_ACCOUNT, { account: redactEmail(settings.forkable.email) });
 
