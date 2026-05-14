@@ -25,9 +25,9 @@ import {
 const CAPTURES = resolve(import.meta.dir, '../../scripts/captures');
 
 const baseSettings: Settings = {
-  forkable: { email: 'test@example.com', password: 'pw' },
+  forkable: { email: 'test@example.com', password: 'pw', timeoutMs: 30_000 },
   openaiApiKey: 'unused',
-  resend: { apiKey: 'unused', notifyTo: 'a@b.com', notifyFrom: 'b@c.com' },
+  resend: { apiKey: 'unused', notifyTo: 'a@b.com', notifyFrom: 'b@c.com', timeoutMs: 10_000 },
   debug: false,
 };
 

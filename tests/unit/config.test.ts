@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
-import { loadSettings } from '../../src/config.ts';
+import {
+  DEFAULT_FORKABLE_TIMEOUT_MS,
+  DEFAULT_RESEND_FROM,
+  DEFAULT_RESEND_TIMEOUT_MS,
+  loadSettings,
+} from '../../src/config.ts';
 
 const VALID_ENV = {
   FORKABLE_EMAIL: 'user@example.com',
@@ -38,12 +43,34 @@ describe('loadSettings', () => {
 
   test("NOTIFY_FROM_EMAIL is optional — defaults to Resend's sender", () => {
     const { NOTIFY_FROM_EMAIL: _, ...withoutFrom } = VALID_ENV;
-    expect(loadSettings(withoutFrom).resend.notifyFrom).toBe('onboarding@resend.dev');
+    expect(loadSettings(withoutFrom).resend.notifyFrom).toBe(DEFAULT_RESEND_FROM);
   });
 
   test("NOTIFY_FROM_EMAIL='' (empty string) also falls back to the default", () => {
     expect(loadSettings({ ...VALID_ENV, NOTIFY_FROM_EMAIL: '' }).resend.notifyFrom).toBe(
-      'onboarding@resend.dev',
+      DEFAULT_RESEND_FROM,
+    );
+  });
+
+  test('timeoutMs values default when env vars are absent', () => {
+    const settings = loadSettings(VALID_ENV);
+    expect(settings.forkable.timeoutMs).toBe(DEFAULT_FORKABLE_TIMEOUT_MS);
+    expect(settings.resend.timeoutMs).toBe(DEFAULT_RESEND_TIMEOUT_MS);
+  });
+
+  test('FORKABLE_TIMEOUT_MS / RESEND_TIMEOUT_MS override the defaults', () => {
+    const settings = loadSettings({
+      ...VALID_ENV,
+      FORKABLE_TIMEOUT_MS: '5000',
+      RESEND_TIMEOUT_MS: '2000',
+    });
+    expect(settings.forkable.timeoutMs).toBe(5000);
+    expect(settings.resend.timeoutMs).toBe(2000);
+  });
+
+  test('rejects a non-positive timeout', () => {
+    expect(() => loadSettings({ ...VALID_ENV, FORKABLE_TIMEOUT_MS: '0' })).toThrow(
+      /forkable\.timeoutMs/,
     );
   });
 });
