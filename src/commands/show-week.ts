@@ -8,6 +8,7 @@ import { loadSettings } from '../config.ts';
 import { bucketLabel, dayLabel, formatPrice, truncate } from '../lib/cli-format.ts';
 import { thisWeekMonday } from '../lib/dates.ts';
 import { firstPieceWithVenue } from '../lib/delivery.ts';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 import { type FlatItem, flattenItems } from '../lib/menus.ts';
 import { redactEmail } from '../lib/redact.ts';
 import { createLogger } from '../logger.ts';
@@ -28,17 +29,17 @@ export async function showWeek(args: string[]): Promise<number> {
     NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
   });
   const logger = createLogger(settings);
-  logger.info(`account: ${redactEmail(settings.forkable.email)}`);
+  logger.info(LOG_EVENTS.RUN_ACCOUNT, { account: redactEmail(settings.forkable.email) });
 
   const client = new ForkableClient(settings.forkable, logger);
   await client.login();
   await client.me();
 
   const from = dateArg ?? thisWeekMonday();
-  logger.info(`fetching deliveries from ${from}`);
+  logger.info(LOG_EVENTS.SHOW_WEEK_FETCH, { from });
   const days = await client.getWeek(from);
   if (days.length === 0) {
-    logger.info('no deliveries returned for that week');
+    logger.info(LOG_EVENTS.SHOW_WEEK_NO_DELIVERIES, { from });
     return 0;
   }
 

@@ -8,8 +8,8 @@
 import { ForkableClient } from '../src/clients/forkable.ts';
 import { loadSettings } from '../src/config.ts';
 import { thisWeekMonday } from '../src/lib/dates.ts';
-import { redactEmail } from '../src/lib/redact.ts';
-import { createLogger } from '../src/logger.ts';
+import { errorMessage } from '../src/lib/error-message.ts';
+import { captureOpsLogger, log, logError, redactEmail } from './lib/logging.ts';
 
 async function main(): Promise<void> {
   // OpenAI/Resend keys aren't used by this script; stub them so we don't
@@ -20,22 +20,21 @@ async function main(): Promise<void> {
     RESEND_API_KEY: process.env.RESEND_API_KEY || 'unused-in-verify',
     NOTIFY_TO_EMAIL: process.env.NOTIFY_TO_EMAIL || 'noreply@example.com',
   });
-  const logger = createLogger(settings);
-  logger.info(`account: ${redactEmail(settings.forkable.email)}`);
+  log(`account: ${redactEmail(settings.forkable.email)}`);
 
-  const client = new ForkableClient(settings.forkable, logger);
+  const client = new ForkableClient(settings.forkable, captureOpsLogger);
   await client.login();
   await client.me();
 
   // ─── GET_WEEK ─────────────────────────────────────────────────────────────
   const from = process.argv[2] ?? thisWeekMonday();
-  logger.info(`\n--- GetWeek(from: ${from}) ---`);
+  log(`\n--- GetWeek(from: ${from}) ---`);
   const days = await client.getWeek(from);
-  logger.info(`GetWeek parsed: ${days.length} day(s)`);
+  log(`GetWeek parsed: ${days.length} day(s)`);
   for (const d of days) {
     const piece = d.orders.find((o) => o.pieces.length > 0)?.pieces[0];
     const editable = d.isReadOnly ? 'locked' : 'editable';
-    logger.info(
+    log(
       `    ${d.forDeliveryAt.slice(0, 10)} | ${editable.padEnd(8)} | current: ${piece?.name ?? '(none)'}`,
     );
   }
@@ -43,29 +42,29 @@ async function main(): Promise<void> {
   // ─── GET_ALTERNATIVES ─────────────────────────────────────────────────────
   const editable = days.find((d) => !d.isReadOnly);
   if (!editable) {
-    logger.info('\nno editable days in this week — skipping GetAlternatives check');
+    log('\nno editable days in this week — skipping GetAlternatives check');
     return;
   }
   if (!editable.club) {
-    logger.error('editable day has no club.id — cannot run GetAlternatives');
+    logError('editable day has no club.id — cannot run GetAlternatives');
     process.exit(2);
   }
 
-  logger.info(
+  log(
     `\n--- GetAlternatives(ids: [${editable.availableMenuIds.join(',')}], clubId: ${editable.club.id}) ---`,
   );
   const menus = await client.getAlternatives(editable.availableMenuIds, editable.club.id);
   const totalItems = menus.flatMap((m) => m.sections).flatMap((s) => s.items).length;
-  logger.info(`GetAlternatives parsed: ${menus.length} venue(s), ${totalItems} items total`);
+  log(`GetAlternatives parsed: ${menus.length} venue(s), ${totalItems} items total`);
   for (const m of menus) {
     const itemCount = m.sections.flatMap((s) => s.items).length;
-    logger.info(`    ${(m.displayName ?? m.name).padEnd(28)} | ${itemCount} items`);
+    log(`    ${(m.displayName ?? m.name).padEnd(28)} | ${itemCount} items`);
   }
 
-  logger.info('\nForkableClient verified live');
+  log('\nForkableClient verified live');
 }
 
-main().catch((err: Error) => {
-  console.error(`[forkable-bot] FAILED: ${err.message}`);
+main().catch((err: unknown) => {
+  console.error(`[forkable-bot] FAILED: ${errorMessage(err)}`);
   process.exit(1);
 });

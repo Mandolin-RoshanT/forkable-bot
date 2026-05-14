@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { Settings } from '../../src/config.ts';
+import { LOG_EVENTS } from '../../src/lib/log-events.ts';
 import { createLogger } from '../../src/logger.ts';
 
 const baseSettings: Settings = {
@@ -14,58 +15,87 @@ const baseSettings: Settings = {
   debug: false,
 };
 
+function captureStdout(fn: () => void): string[] {
+  const captured: string[] = [];
+  const original = console.log;
+  console.log = (msg: string) => captured.push(msg);
+  try {
+    fn();
+  } finally {
+    console.log = original;
+  }
+  return captured;
+}
+
+function captureStderr(fn: () => void): string[] {
+  const captured: string[] = [];
+  const original = console.error;
+  console.error = (msg: string) => captured.push(msg);
+  try {
+    fn();
+  } finally {
+    console.error = original;
+  }
+  return captured;
+}
+
 describe('createLogger', () => {
-  test('scrubs the forkable password from messages', () => {
+  test('scrubs the forkable password when it appears in payload values', () => {
     const logger = createLogger(baseSettings);
-    const captured: string[] = [];
-    const original = console.log;
-    console.log = (msg: string) => captured.push(msg);
-    try {
-      logger.info('login failed for password=super-secret-pw');
-    } finally {
-      console.log = original;
-    }
-    expect(captured[0]).toContain('<redacted>');
-    expect(captured[0]).not.toContain('super-secret-pw');
+    const lines = captureStdout(() => {
+      logger.info(LOG_EVENTS.RUN_ACCOUNT, { context: 'login failed for super-secret-pw' });
+    });
+    expect(lines[0]).toContain('<redacted>');
+    expect(lines[0]).not.toContain('super-secret-pw');
   });
 
-  test('scrubs the openai key from messages', () => {
+  test('scrubs the openai key from serialized payload', () => {
     const logger = createLogger(baseSettings);
-    const captured: string[] = [];
-    const original = console.log;
-    console.log = (msg: string) => captured.push(msg);
-    try {
-      logger.info('Authorization: Bearer sk-openai-key-12345');
-    } finally {
-      console.log = original;
-    }
-    expect(captured[0]).not.toContain('sk-openai-key-12345');
+    const lines = captureStdout(() => {
+      logger.info(LOG_EVENTS.RUN_MODE, { header: 'Authorization: Bearer sk-openai-key-12345' });
+    });
+    expect(lines[0]).not.toContain('sk-openai-key-12345');
+  });
+
+  test('emits event name with no payload suffix when data is omitted', () => {
+    const logger = createLogger(baseSettings);
+    const lines = captureStdout(() => {
+      logger.info(LOG_EVENTS.RUN_NO_MAILER);
+    });
+    expect(lines[0]).toBe('[forkable-bot] run.no_mailer_configured');
+  });
+
+  test('emits event name plus JSON data when payload is non-empty', () => {
+    const logger = createLogger(baseSettings);
+    const lines = captureStdout(() => {
+      logger.info(LOG_EVENTS.RUN_TARGET_WEEK, { from: '2026-05-04' });
+    });
+    expect(lines[0]).toBe('[forkable-bot] run.target_week {"from":"2026-05-04"}');
+  });
+
+  test('warn() prefixes WARN and goes to stdout', () => {
+    const logger = createLogger(baseSettings);
+    const lines = captureStdout(() => {
+      logger.warn(LOG_EVENTS.RUN_NO_MAILER);
+    });
+    expect(lines[0]).toBe('[forkable-bot] WARN run.no_mailer_configured');
+  });
+
+  test('error() prefixes ERROR and routes to stderr', () => {
+    const lines = captureStderr(() => {
+      createLogger(baseSettings).error(LOG_EVENTS.SCORER_NETWORK_FAILED, { candidate: 'x' });
+    });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toBe('[forkable-bot] ERROR scorer.network_failed {"candidate":"x"}');
   });
 
   test('debug() is suppressed unless settings.debug is true', () => {
-    const captured: string[] = [];
-    const original = console.log;
-    console.log = (msg: string) => captured.push(msg);
-    try {
-      createLogger(baseSettings).debug('quiet');
-      createLogger({ ...baseSettings, debug: true }).debug('loud');
-    } finally {
-      console.log = original;
-    }
-    expect(captured).toHaveLength(1);
-    expect(captured[0]).toContain('loud');
-  });
-
-  test('error() routes to stderr', () => {
-    const captured: string[] = [];
-    const original = console.error;
-    console.error = (msg: string) => captured.push(msg);
-    try {
-      createLogger(baseSettings).error('boom');
-    } finally {
-      console.error = original;
-    }
-    expect(captured).toHaveLength(1);
-    expect(captured[0]).toContain('boom');
+    const lines = captureStdout(() => {
+      createLogger(baseSettings).debug(LOG_EVENTS.FORKABLE_POST_OUT);
+      createLogger({ ...baseSettings, debug: true }).debug(LOG_EVENTS.FORKABLE_POST_OUT);
+    });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('DEBUG');
+    expect(lines[0]).toContain('forkable.post_out');
   });
 });

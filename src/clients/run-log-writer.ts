@@ -6,6 +6,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import { type RunLogRow, toCsv } from '../core/run-log.ts';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 import type { Logger } from '../logger.ts';
 
 export class CsvRunLogWriter {
@@ -20,6 +21,6 @@ export class CsvRunLogWriter {
     }
     await mkdir(dirname(this.path), { recursive: true });
     await writeFile(this.path, toCsv(rows));
-    this.logger.info(`logged ${rows.length} row(s) → ${this.path}`);
+    this.logger.info(LOG_EVENTS.CSV_WRITTEN, { rows: rows.length, path: this.path });
   }
 }

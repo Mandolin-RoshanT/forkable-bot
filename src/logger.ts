@@ -1,13 +1,23 @@
 // Settings-driven logger. Secrets known at construction time are scrubbed
 // from every log line before output, so an accidental include of the password
-// or an API key in a message can't leak to stdout.
+// or an API key in a payload can't leak to stdout.
+//
+// The interface takes a typed `LogEvent` constant plus an optional structured
+// `data` payload — never free-form strings (per .claude/rules/architecture.md).
+// Output format: `[forkable-bot] <level> event.name {"key":"value"}` where
+// `<level>` is omitted for INFO, and the JSON suffix is omitted when `data`
+// is empty.
 
 import type { Settings } from './config.ts';
+import type { LogEvent } from './lib/log-events.ts';
+
+export type LogData = Record<string, unknown>;
 
 export type Logger = {
-  info(msg: string): void;
-  error(msg: string): void;
-  debug(msg: string): void;
+  info(event: LogEvent, data?: LogData): void;
+  warn(event: LogEvent, data?: LogData): void;
+  error(event: LogEvent, data?: LogData): void;
+  debug(event: LogEvent, data?: LogData): void;
 };
 
 const PREFIX = '[forkable-bot]';
@@ -19,8 +29,8 @@ export function createLogger(settings: Settings): Logger {
     settings.resend.apiKey,
   ].filter((s) => s.length >= 4);
 
-  function scrub(msg: string): string {
-    let out = msg;
+  function scrub(line: string): string {
+    let out = line;
     for (const s of secrets) {
       if (out.includes(s)) {
         out = out.replaceAll(s, '<redacted>');
@@ -29,16 +39,25 @@ export function createLogger(settings: Settings): Logger {
     return out;
   }
 
+  function format(level: string, event: LogEvent, data: LogData | undefined): string {
+    const payload = data && Object.keys(data).length > 0 ? ` ${JSON.stringify(data)}` : '';
+    const prefix = level === 'INFO' ? PREFIX : `${PREFIX} ${level}`;
+    return scrub(`${prefix} ${event}${payload}`);
+  }
+
   return {
-    info(msg) {
-      console.log(`${PREFIX} ${scrub(msg)}`);
+    info(event, data) {
+      console.log(format('INFO', event, data));
     },
-    error(msg) {
-      console.error(`${PREFIX} ${scrub(msg)}`);
+    warn(event, data) {
+      console.log(format('WARN', event, data));
     },
-    debug(msg) {
+    error(event, data) {
+      console.error(format('ERROR', event, data));
+    },
+    debug(event, data) {
       if (settings.debug) {
-        console.log(`${PREFIX} ${scrub(msg)}`);
+        console.log(format('DEBUG', event, data));
       }
     },
   };

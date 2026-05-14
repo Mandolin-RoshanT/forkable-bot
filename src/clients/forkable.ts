@@ -5,8 +5,11 @@
 // matching Zod schema — schema drift surfaces as a typed error here, not as
 // a silent `undefined` deeper in the picker.
 
+import type { z } from 'zod';
+
 import { BROWSER_HEADERS, FORKABLE_GRAPHQL } from '../lib/constants.ts';
 import { CookieJar } from '../lib/cookie-jar.ts';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 import { redactCookie } from '../lib/redact.ts';
 import type { Logger } from '../logger.ts';
 import {
@@ -29,12 +32,7 @@ import {
   type Menu,
   ReplacePieceResponseSchema,
 } from '../schemas/forkable.ts';
-import {
-  ForkableAuthError,
-  ForkableError,
-  ForkableNetworkError,
-  ForkableSchemaError,
-} from './forkable-errors.ts';
+import { ForkableError } from './forkable-errors.ts';
 
 export type ForkableCreds = { email: string; password: string };
 
@@ -77,24 +75,35 @@ export class ForkableClient {
       'CreateSession',
     );
 
-    const parsed = CreateSessionResponseSchema.parse(raw);
+    const parsed = this.parseOrThrow(CreateSessionResponseSchema, raw, 'CreateSession');
     const session = parsed.createSession;
 
     if (!session.user) {
-      throw new ForkableAuthError(
-        `createSession returned no user. errorAttributes=${JSON.stringify(
-          session.errorAttributes,
-        )} errorDetails=${JSON.stringify(session.errorDetails)}`,
-      );
+      throw new ForkableError({
+        kind: 'auth',
+        message: 'createSession returned no user',
+        body: {
+          errorAttributes: session.errorAttributes,
+          errorDetails: session.errorDetails,
+        },
+        context: { operation: 'createSession' },
+      });
     }
     if (session.user.mfaEnabled) {
-      throw new ForkableAuthError('MFA is enabled — bot cannot proceed (PRD §7.1).');
+      throw new ForkableError({
+        kind: 'auth',
+        message: 'MFA is enabled — bot cannot proceed (PRD §7.1)',
+        context: { operation: 'createSession' },
+      });
     }
 
     const sessionCookie = this.extractSessionCookie(beforeLogin);
 
-    this.logger.info(`createSession → ok (user ${session.user.id})`);
-    this.logger.info(`cookie attached: ${sessionCookie.name}=${redactCookie(sessionCookie.value)}`);
+    this.logger.info(LOG_EVENTS.FORKABLE_LOGIN_OK, { user: session.user.id });
+    this.logger.info(LOG_EVENTS.FORKABLE_SESSION_COOKIE, {
+      name: sessionCookie.name,
+      value: redactCookie(sessionCookie.value),
+    });
 
     this.loggedInUser = session.user;
     return session.user;
@@ -103,11 +112,15 @@ export class ForkableClient {
   async me(): Promise<ForkableUser> {
     this.requireLogin('me');
     const raw = await this.post({ operationName: 'Me', query: ME_QUERY }, 'Me');
-    const parsed = MeResponseSchema.parse(raw);
+    const parsed = this.parseOrThrow(MeResponseSchema, raw, 'Me');
     if (!parsed.me) {
-      throw new ForkableAuthError('me returned null — session cookie not accepted');
+      throw new ForkableError({
+        kind: 'auth',
+        message: 'me returned null — session cookie not accepted',
+        context: { operation: 'me' },
+      });
     }
-    this.logger.info(`me → ok (user ${parsed.me.id})`);
+    this.logger.info(LOG_EVENTS.FORKABLE_ME_OK, { user: parsed.me.id });
     return parsed.me;
   }
 
@@ -120,7 +133,7 @@ export class ForkableClient {
       { operationName: 'GetWeek', query: GET_WEEK_QUERY, variables },
       'GetWeek',
     );
-    const parsed = GetWeekResponseSchema.parse(raw);
+    const parsed = this.parseOrThrow(GetWeekResponseSchema, raw, 'GetWeek');
     return parsed.myDeliveries;
   }
 
@@ -131,14 +144,14 @@ export class ForkableClient {
       { operationName: 'GetAlternatives', query: GET_ALTERNATIVES_QUERY, variables },
       'GetAlternatives',
     );
-    const parsed = GetAlternativesResponseSchema.parse(raw);
+    const parsed = this.parseOrThrow(GetAlternativesResponseSchema, raw, 'GetAlternatives');
     return parsed.menus;
   }
 
   // Swap the user's chosen piece for a different (menu, item) on the same day.
   // Per locked v1 decision: selectionsHash={} (server fills modifier defaults).
-  // Throws ForkableNetworkError / ForkableError / ForkableSchemaError on
-  // failure; caller catches per-day so a single bad swap can't kill the run.
+  // Throws ForkableError (kind: 'network' | 'schema' | 'graphql') on failure;
+  // caller catches per-day so a single bad swap can't kill the run.
   async swapMeal(args: {
     deliveryId: number;
     oldPieceId: string;
@@ -164,17 +177,23 @@ export class ForkableClient {
       'ReplacePiece',
     );
     // Validate the shape; we don't need the value.
-    ReplacePieceResponseSchema.parse(raw);
-    this.logger.info(
-      `replacePiece → ok (delivery ${args.deliveryId}, menu ${args.menuId}, item ${args.itemId})`,
-    );
+    this.parseOrThrow(ReplacePieceResponseSchema, raw, 'ReplacePiece');
+    this.logger.info(LOG_EVENTS.FORKABLE_REPLACE_OK, {
+      delivery: args.deliveryId,
+      menu: args.menuId,
+      item: args.itemId,
+    });
   }
 
   // ─── private ─────────────────────────────────────────────────────────────
 
   private requireLogin(method: string): void {
     if (!this.loggedInUser) {
-      throw new ForkableAuthError(`must login() before calling ${method}()`);
+      throw new ForkableError({
+        kind: 'auth',
+        message: `must login() before calling ${method}()`,
+        context: { operation: method },
+      });
     }
   }
 
@@ -186,10 +205,32 @@ export class ForkableClient {
     const newCookies = this.jar.diff(beforeLogin);
     const name = newCookies.find((n) => n.toLowerCase().includes('session')) ?? newCookies[0];
     if (!name) {
-      throw new ForkableAuthError('createSession set no new cookies — auth flow broken');
+      throw new ForkableError({
+        kind: 'auth',
+        message: 'createSession set no new cookies — auth flow broken',
+        context: { operation: 'createSession' },
+      });
     }
     const value = this.jar.get(name) ?? '';
     return { name, value };
+  }
+
+  // Run a zod schema against an upstream response and wrap any ZodError as
+  // a schema-kind ForkableError carrying the operation name and the raw
+  // payload. Preserves the ZodError as `cause` so the path info is intact
+  // for the schema-drift recovery flow.
+  private parseOrThrow<T>(schema: z.ZodType<T>, raw: unknown, operation: string): T {
+    try {
+      return schema.parse(raw);
+    } catch (err) {
+      throw new ForkableError({
+        kind: 'schema',
+        message: `${operation}: response did not match schema`,
+        body: raw,
+        context: { operation },
+        cause: err,
+      });
+    }
   }
 
   // Anonymous POST → expected 401, seeds AWS ALB sticky-session cookies.
@@ -203,9 +244,10 @@ export class ForkableClient {
     await res.text();
     this.jar.add(res.headers);
     const captured = this.jar.size - before;
-    this.logger.info(
-      `warmup → ${res.status} (${captured} sticky cookie${captured === 1 ? '' : 's'})`,
-    );
+    this.logger.info(LOG_EVENTS.FORKABLE_WARMUP, {
+      status: res.status,
+      stickyCookies: captured,
+    });
   }
 
   // Public escape hatch for capture-ops and any future ad-hoc tooling.
@@ -227,7 +269,7 @@ export class ForkableClient {
     }
 
     const cookieNames = this.jar.names().join(', ') || 'none';
-    this.logger.debug(`  → POST ${opLabel} (cookies: ${cookieNames})`);
+    this.logger.debug(LOG_EVENTS.FORKABLE_POST_OUT, { op: opLabel, cookies: cookieNames });
 
     const res = await fetch(FORKABLE_GRAPHQL, {
       method: 'POST',
@@ -237,19 +279,37 @@ export class ForkableClient {
     this.jar.add(res.headers);
 
     const text = await res.text();
-    this.logger.debug(`  ← ${res.status} ${res.statusText} (${text.length}B)`);
+    this.logger.debug(LOG_EVENTS.FORKABLE_POST_IN, {
+      op: opLabel,
+      status: res.status,
+      statusText: res.statusText,
+      bytes: text.length,
+    });
 
     if (!res.ok) {
-      throw new ForkableNetworkError(
-        `${opLabel}: HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`,
-        res.status,
-      );
+      throw new ForkableError({
+        kind: 'network',
+        message: `${opLabel}: HTTP ${res.status} ${res.statusText}`,
+        status: res.status,
+        body: text.slice(0, 500),
+        context: {
+          operation: opLabel,
+          url: FORKABLE_GRAPHQL,
+          statusText: res.statusText,
+        },
+      });
     }
 
     try {
       return JSON.parse(text) as GraphQLResponse;
     } catch (err) {
-      throw new ForkableSchemaError(`${opLabel}: response was not valid JSON`, err);
+      throw new ForkableError({
+        kind: 'schema',
+        message: `${opLabel}: response was not valid JSON`,
+        body: text.slice(0, 500),
+        context: { operation: opLabel },
+        cause: err,
+      });
     }
   }
 
@@ -258,7 +318,12 @@ export class ForkableClient {
   private async post(body: GraphQLBody, opLabel: string): Promise<unknown> {
     const res = await this.postRaw(body, opLabel);
     if (res.errors && res.errors.length > 0) {
-      throw new ForkableError(`${opLabel}: GraphQL errors: ${JSON.stringify(res.errors)}`);
+      throw new ForkableError({
+        kind: 'graphql',
+        message: `${opLabel}: GraphQL errors`,
+        body: res.errors,
+        context: { operation: opLabel },
+      });
     }
     return res.data;
   }

@@ -8,6 +8,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import OpenAI from 'openai';
 
+import { errorMessage } from '../lib/error-message.ts';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 import type { Logger } from '../logger.ts';
 import { type MealCandidate, type Score, ScoreSchema } from '../models.ts';
 
@@ -39,8 +41,11 @@ export class OpenAIScorer {
     try {
       raw = await this.chat({ system, user });
     } catch (err) {
-      const msg = (err as Error).message;
-      this.logger.error(`scoring "${candidate.name}" failed: ${msg}`);
+      const msg = errorMessage(err);
+      this.logger.error(LOG_EVENTS.SCORER_NETWORK_FAILED, {
+        candidate: candidate.name,
+        error: msg,
+      });
       return redScore(`OpenAI error: ${msg}`);
     }
 
@@ -48,13 +53,19 @@ export class OpenAIScorer {
     try {
       json = JSON.parse(raw);
     } catch {
-      this.logger.error(`scoring "${candidate.name}" returned invalid JSON: ${raw.slice(0, 200)}`);
+      this.logger.error(LOG_EVENTS.SCORER_INVALID_JSON, {
+        candidate: candidate.name,
+        rawPreview: raw.slice(0, 200),
+      });
       return redScore('parse failed: invalid JSON');
     }
 
     const parsed = ScoreSchema.safeParse(json);
     if (!parsed.success) {
-      this.logger.error(`scoring "${candidate.name}" failed schema check: ${parsed.error.message}`);
+      this.logger.error(LOG_EVENTS.SCORER_SCHEMA_FAILED, {
+        candidate: candidate.name,
+        error: parsed.error.message,
+      });
       return redScore(`parse failed: ${parsed.error.message}`);
     }
     return parsed.data;

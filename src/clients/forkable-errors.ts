@@ -1,35 +1,40 @@
-// Typed errors for ForkableClient. Callers (cli.ts, picker, etc.) catch
-// these by class so a network blip is distinguishable from an auth failure
-// or a schema-drift bug.
+// Single typed error for everything ForkableClient throws (per
+// .claude/rules/error-handling.md: "A single typed error class per
+// domain ... carrying structured context, not just a message").
+//
+// `kind` lets callers branch on the failure mode; `status` / `body`
+// carry HTTP-shaped detail; `context` carries operation metadata
+// (operation name, URL, attempt number, etc.); `cause` preserves the
+// original error so the chain isn't lost.
+
+export type ForkableErrorKind = 'auth' | 'network' | 'graphql' | 'schema';
+
+export type ForkableErrorContext = {
+  operation: string;
+  [key: string]: unknown;
+};
+
+export type ForkableErrorOptions = {
+  kind: ForkableErrorKind;
+  message: string;
+  status?: number;
+  body?: unknown;
+  context: ForkableErrorContext;
+  cause?: unknown;
+};
 
 export class ForkableError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
+  readonly kind: ForkableErrorKind;
+  readonly status: number | undefined;
+  readonly body: unknown;
+  readonly context: ForkableErrorContext;
+
+  constructor(opts: ForkableErrorOptions) {
+    super(opts.message, opts.cause !== undefined ? { cause: opts.cause } : undefined);
     this.name = 'ForkableError';
-  }
-}
-
-export class ForkableAuthError extends ForkableError {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = 'ForkableAuthError';
-  }
-}
-
-export class ForkableNetworkError extends ForkableError {
-  constructor(
-    message: string,
-    public readonly status: number,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-    this.name = 'ForkableNetworkError';
-  }
-}
-
-export class ForkableSchemaError extends ForkableError {
-  constructor(message: string, cause: unknown) {
-    super(message, { cause });
-    this.name = 'ForkableSchemaError';
+    this.kind = opts.kind;
+    this.status = opts.status;
+    this.body = opts.body;
+    this.context = opts.context;
   }
 }
