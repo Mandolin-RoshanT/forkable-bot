@@ -40,7 +40,9 @@ export async function runPicker(args: string[], opts: { dryRun: boolean }): Prom
   const mailer = ResendMailer.fromEnv(process.env, settings, logger);
 
   try {
-    const client = new ForkableClient(settings.forkable, logger);
+    const client = new ForkableClient(settings.forkable, logger, {
+      timeoutMs: settings.forkable.timeoutMs,
+    });
     await client.login();
     await client.me();
 

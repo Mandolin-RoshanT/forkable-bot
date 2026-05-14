@@ -22,7 +22,9 @@ async function main(): Promise<void> {
   });
   log(`account: ${redactEmail(settings.forkable.email)}`);
 
-  const client = new ForkableClient(settings.forkable, captureOpsLogger);
+  const client = new ForkableClient(settings.forkable, captureOpsLogger, {
+    timeoutMs: settings.forkable.timeoutMs,
+  });
   await client.login();
   await client.me();
 

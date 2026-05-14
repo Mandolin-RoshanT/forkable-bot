@@ -5,12 +5,13 @@ import { LOG_EVENTS } from '../../src/lib/log-events.ts';
 import { createLogger } from '../../src/logger.ts';
 
 const baseSettings: Settings = {
-  forkable: { email: 'r@example.com', password: 'super-secret-pw' },
+  forkable: { email: 'r@example.com', password: 'super-secret-pw', timeoutMs: 30_000 },
   openaiApiKey: 'sk-openai-key-12345',
   resend: {
     apiKey: 're_resend_key_67890',
     notifyTo: 'r@example.com',
     notifyFrom: 'bot@example.com',
+    timeoutMs: 10_000,
   },
   debug: false,
 };
