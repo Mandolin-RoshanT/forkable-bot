@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
+import { ResendError } from '../../src/clients/resend-errors.ts';
 import { ResendMailer } from '../../src/clients/resend-mailer.ts';
+import type { FetchFn } from '../../src/lib/fetch.ts';
 import { silentLogger } from '../fixtures/msw.ts';
 
 const config = {
@@ -75,8 +77,46 @@ describe('ResendMailer.sendFailure', () => {
   test('throws on non-2xx', async () => {
     nextResponse = new Response('bad token', { status: 401 });
     const mailer = new ResendMailer(config, silentLogger);
-    await expect(mailer.sendFailure({ mode: 'pick', error: new Error('x') })).rejects.toThrow(
-      /HTTP 401/,
-    );
+    const err = (await mailer
+      .sendFailure({ mode: 'pick', error: new Error('x') })
+      .catch((e) => e)) as ResendError;
+    expect(err).toBeInstanceOf(ResendError);
+    expect(err.status).toBe(401);
+    expect(err.body).toBe('bad token');
+    expect(err.context.operation).toBe('sendFailure');
+  });
+
+  test('aborts a hung Resend request via the timeout', async () => {
+    // Inject a fetchFn that hangs until the AbortSignal fires — this
+    // bypasses the global fetch shim entirely (preferred per
+    // .claude/rules/deliverables.md).
+    const fetchFn: FetchFn = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('aborted', 'AbortError'));
+        });
+      });
+
+    const mailer = new ResendMailer(config, silentLogger, { fetchFn, timeoutMs: 10 });
+    const err = (await mailer
+      .sendFailure({ mode: 'pick', error: new Error('underlying failure') })
+      .catch((e) => e)) as ResendError;
+    expect(err).toBeInstanceOf(ResendError);
+    expect(err.message).toMatch(/timed out/);
+    expect(err.context.timeoutMs).toBe(10);
+    expect(err.context.operation).toBe('sendFailure');
+    expect((err.cause as Error).name).toBe('AbortError');
+  });
+
+  test('wraps non-timeout fetch failures as ResendError', async () => {
+    const fetchFn: FetchFn = () => Promise.reject(new TypeError('fetch failed'));
+
+    const mailer = new ResendMailer(config, silentLogger, { fetchFn });
+    const err = (await mailer
+      .sendFailure({ mode: 'dry-run', error: new Error('x') })
+      .catch((e) => e)) as ResendError;
+    expect(err).toBeInstanceOf(ResendError);
+    expect(err.message).toMatch(/fetch failed/);
+    expect((err.cause as Error).message).toBe('fetch failed');
   });
 });
