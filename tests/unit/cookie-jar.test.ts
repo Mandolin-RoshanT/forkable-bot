@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { CookieJar } from '../../src/lib/cookie-jar.ts';
+import { CookieJar } from '../../src/clients/cookie-jar.ts';
 
 // Real Headers with Set-Cookie pairs. Using `new Headers().append()` is
 // the cleanest way to populate getSetCookie() in Bun.

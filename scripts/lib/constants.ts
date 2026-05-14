@@ -1,10 +1,10 @@
-// HTTP constants live in src/lib/constants.ts (single source of truth);
+// HTTP constants live alongside the Forkable client (single source of truth);
 // this file re-exports them and adds spike-only on-disk paths.
 
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export { BROWSER_HEADERS, FORKABLE_GRAPHQL } from '../../src/lib/constants.ts';
+export { BROWSER_HEADERS, FORKABLE_GRAPHQL } from '../../src/clients/forkable.ts';
 
 // Paths relative to this file so the spike script works from any cwd.
 const LIB_DIR = dirname(fileURLToPath(import.meta.url));

@@ -2,7 +2,7 @@
 
 import type { Logger } from '../../src/logger.ts';
 
-export { redactCookie, redactEmail } from '../../src/lib/redact.ts';
+export { redactCookie, redactEmail } from '../../src/format.ts';
 
 export function log(msg: string): void {
   console.log(`[capture-ops] ${msg}`);
