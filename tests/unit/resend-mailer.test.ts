@@ -6,7 +6,7 @@ import { silentLogger } from '../fixtures/msw.ts';
 const config = {
   apiKey: 're_test_key',
   from: 'bot@example.com',
-  to: 'roshan@example.com',
+  to: 'user@example.com',
 };
 
 // We patch the global `fetch` for these tests rather than pulling in MSW —
@@ -66,7 +66,7 @@ describe('ResendMailer.sendFailure', () => {
 
     const body = JSON.parse(String(firstRequest().init.body));
     expect(body.from).toBe('bot@example.com');
-    expect(body.to).toBe('roshan@example.com');
+    expect(body.to).toBe('user@example.com');
     expect(body.subject).toContain('dry-run');
     expect(body.subject).toContain('Error');
     expect(body.text).toContain('login failed');

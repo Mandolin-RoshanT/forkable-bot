@@ -52,8 +52,8 @@ jobs:
       - run: bun install --frozen-lockfile
 
       # Cron has no `inputs.mode` so we default to dry-run during the M4
-      # validation window. Flip this default to `pick` once we've watched
-      # a full week of dry-runs match Roshan's manual picks.
+      # validation window. Flip this default to `pick` once you've watched
+      # a full week of dry-runs match your manual picks.
       - name: Run picker
         run: bun src/index.ts ${{ inputs.mode || 'dry-run' }}
 

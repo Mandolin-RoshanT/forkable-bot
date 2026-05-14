@@ -31,7 +31,7 @@ async function main(): Promise<void> {
   const from = process.argv[2] ?? thisWeekMonday();
   logger.info(`\n--- GetWeek(from: ${from}) ---`);
   const days = await client.getWeek(from);
-  logger.info(`✓ GetWeek parsed: ${days.length} day(s)`);
+  logger.info(`GetWeek parsed: ${days.length} day(s)`);
   for (const d of days) {
     const piece = d.orders.find((o) => o.pieces.length > 0)?.pieces[0];
     const editable = d.isReadOnly ? 'locked' : 'editable';
@@ -56,13 +56,13 @@ async function main(): Promise<void> {
   );
   const menus = await client.getAlternatives(editable.availableMenuIds, editable.club.id);
   const totalItems = menus.flatMap((m) => m.sections).flatMap((s) => s.items).length;
-  logger.info(`✓ GetAlternatives parsed: ${menus.length} venue(s), ${totalItems} items total`);
+  logger.info(`GetAlternatives parsed: ${menus.length} venue(s), ${totalItems} items total`);
   for (const m of menus) {
     const itemCount = m.sections.flatMap((s) => s.items).length;
     logger.info(`    ${(m.displayName ?? m.name).padEnd(28)} | ${itemCount} items`);
   }
 
-  logger.info('\nForkableClient verified live ✓');
+  logger.info('\nForkableClient verified live');
 }
 
 main().catch((err: Error) => {

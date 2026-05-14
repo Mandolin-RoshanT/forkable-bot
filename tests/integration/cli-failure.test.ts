@@ -20,7 +20,7 @@ const TEST_ENV: Record<string, string> = {
   FORKABLE_PASSWORD: 'wrong-password',
   OPENAI_API_KEY: 'sk-test-key',
   RESEND_API_KEY: 're_test_key',
-  NOTIFY_TO_EMAIL: 'roshan@example.com',
+  NOTIFY_TO_EMAIL: 'user@example.com',
   NOTIFY_FROM_EMAIL: 'bot@example.com',
 };
 

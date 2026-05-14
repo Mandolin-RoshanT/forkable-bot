@@ -10,7 +10,7 @@ describe('redactCookie', () => {
 
 describe('redactEmail', () => {
   test('masks the local part', () => {
-    expect(redactEmail('roshan@mandolin.com')).toBe('r***@mandolin.com');
+    expect(redactEmail('user@example.com')).toBe('u***@example.com');
   });
 
   test('handles malformed input', () => {
